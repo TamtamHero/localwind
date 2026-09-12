@@ -280,6 +280,7 @@ function App() {
   const maxCount = dataset.maxCount;
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
+   const miniHalf = RADIUS + 20;
 
 
   const colorForSpeed = (speed: number) => {
@@ -810,10 +811,10 @@ function App() {
             borderRadius: 12,
             border: "1px solid rgba(148,163,184,0.45)",
             background: bg,
-            padding: "0.45rem 0.5rem 0.55rem",
+            padding: "0.35rem 0.35rem 0.4rem",
             display: "flex",
             flexDirection: "column",
-            gap: 4,
+            gap: 2,
             transition: "background 150ms ease, box-shadow 150ms ease",
             zIndex: isSelected ? 2 : 1,
             boxShadow:
@@ -854,7 +855,7 @@ function App() {
               <svg
                 width="100%"
                 height="100%"
-                viewBox={`0 0 ${totalRadius * 2} ${totalRadius * 2}`}
+                viewBox={`${center - miniHalf} ${center - miniHalf} ${miniHalf * 2} ${miniHalf * 2}`}
                 preserveAspectRatio="xMidYMid meet"
                 style={{ position: "absolute", inset: 0 }}
               >
