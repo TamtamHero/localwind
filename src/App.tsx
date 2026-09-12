@@ -139,8 +139,46 @@ function App() {
     return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr };
   }, [data, highPrecision]);
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+   if (loading)
+     return (
+       <div
+         style={{
+           minHeight: "100vh",
+           margin: 0,
+           padding: "1rem",
+           background: "radial-gradient(circle at top, #0f172a, #020617)",
+           color: "#e5e7eb",
+           fontFamily:
+             "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+           display: "flex",
+           alignItems: "center",
+           justifyContent: "center",
+         }}
+       >
+         Loading...
+       </div>
+     );
+
+   if (error)
+     return (
+       <div
+         style={{
+           minHeight: "100vh",
+           margin: 0,
+           padding: "1rem",
+           background: "radial-gradient(circle at top, #0f172a, #020617)",
+           color: "#e5e7eb",
+           fontFamily:
+             "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+           display: "flex",
+           alignItems: "center",
+           justifyContent: "center",
+         }}
+       >
+         Error: {error}
+       </div>
+     );
+
 
   const activeIndex =
     selectedIndex != null ? selectedIndex : hoverIndex != null ? hoverIndex : null;
@@ -159,8 +197,9 @@ function App() {
       : null;
 
   const maxCount = Math.max(1, ...counts);
-  const center = RADIUS + 10;
-  const totalRadius = RADIUS + 10;
+   const center = RADIUS + 30;
+   const totalRadius = RADIUS + 40;
+
 
   const colorForSpeed = (speed: number) => {
     const clamped = Math.max(0, Math.min(30, speed));
@@ -172,35 +211,36 @@ function App() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        margin: 0,
-        padding: "2rem",
-        background: "radial-gradient(circle at top, #0f172a, #020617)",
-        color: "#e5e7eb",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 900,
-          width: "100%",
-          background: "rgba(15,23,42,0.9)",
-          borderRadius: 24,
-          border: "1px solid rgba(148,163,184,0.25)",
-          boxShadow:
-            "0 24px 80px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.8)",
-          padding: "1.75rem 2rem 2rem",
-          backdropFilter: "blur(18px)",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
-          gap: "1.75rem",
-        }}
-      >
+     <div
+       style={{
+         minHeight: "100vh",
+         margin: 0,
+         padding: "1.25rem",
+         background: "radial-gradient(circle at top, #0f172a, #020617)",
+         color: "#e5e7eb",
+         fontFamily:
+           "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+         display: "flex",
+         flexDirection: "column",
+       }}
+     >
+       <div
+         style={{
+           width: "100%",
+           height: "100%",
+           background: "rgba(15,23,42,0.9)",
+           borderRadius: 24,
+           border: "1px solid rgba(148,163,184,0.25)",
+           boxShadow:
+             "0 24px 80px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.8)",
+           padding: "1.25rem 1.5rem 1.5rem",
+           backdropFilter: "blur(18px)",
+           display: "grid",
+           gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
+           gap: "1.5rem",
+           alignItems: "stretch",
+         }}
+       >
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <div>
             <div
@@ -420,25 +460,30 @@ function App() {
           )}
         </div>
 
-        <div
-          style={{
-            background:
-              "radial-gradient(circle at 20% 0%, rgba(56,189,248,0.15), transparent 55%)," +
-              "radial-gradient(circle at 80% 120%, rgba(239,68,68,0.18), transparent 55%)",
-            borderRadius: 9999,
-            border: "1px solid rgba(148,163,184,0.45)",
-            padding: 18,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ position: "relative" }}>
-            <svg
-              width={totalRadius * 2}
-              height={totalRadius * 2}
-              viewBox={`0 0 ${totalRadius * 2} ${totalRadius * 2}`}
-            >
+         <div
+           style={{
+             display: "flex",
+             alignItems: "center",
+             justifyContent: "center",
+             width: "100%",
+           }}
+         >
+           <div
+             style={{
+               position: "relative",
+               width: "100%",
+               maxWidth: 640,
+               display: "flex",
+               alignItems: "center",
+               justifyContent: "center",
+             }}
+           >
+              <svg
+                width="80%"
+                height="80%"
+                viewBox={`0 0 ${totalRadius * 2} ${totalRadius * 2}`}
+                preserveAspectRatio="xMidYMid meet"
+              >
             <defs>
               <radialGradient id="centerGlow" cx="50%" cy="40%" r="60%">
                 <stop offset="0%" stopColor="#e5e7eb" stopOpacity={0.6} />
@@ -501,10 +546,11 @@ function App() {
               const avgSpeed = avgSpeeds[i] ?? 0;
               const fillColor = colorForSpeed(avgSpeed);
 
-              const count = labels.length;
-              const angleStep = (2 * Math.PI) / count;
-              const startAngle = -Math.PI / 2 + (i - 0.5) * angleStep;
-              const endAngle = startAngle + angleStep * 0.9;
+               const count = labels.length;
+               const angleStep = (2 * Math.PI) / count;
+               const startAngle = -Math.PI / 2 + (i - 0.5) * angleStep;
+               const endAngle = startAngle + angleStep * 0.9;
+
 
               const x1Inner = center + INNER_RADIUS * Math.cos(startAngle);
               const y1Inner = center + INNER_RADIUS * Math.sin(startAngle);
@@ -527,10 +573,11 @@ function App() {
                 "Z",
               ].join(" ");
 
-              const midAngle = (startAngle + endAngle) / 2;
-              const labelR = RADIUS + 18;
-              const lx = center + labelR * Math.cos(midAngle);
-              const ly = center + labelR * Math.sin(midAngle);
+               const midAngle = -Math.PI / 2 + i * angleStep;
+               const labelR = RADIUS + 14;
+               const lx = center + labelR * Math.cos(midAngle);
+               const ly = center + labelR * Math.sin(midAngle);
+
 
               const isHovered = hoverIndex === i;
               const isSelected = selectedIndex === i;
