@@ -111,12 +111,41 @@ function App() {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
-  const { labels, counts, avgSpeeds } = useMemo(() => {
-    const dirs = data?.hourly?.wind_direction_10m ?? [];
-    const speeds = data?.hourly?.wind_speed_10m ?? [];
-    const labelsArr = highPrecision ? baseDirs16 : baseDirs8;
-    const countsMap: Record<string, number> = {};
-    const speedSumMap: Record<string, number> = {};
+   const { labels, counts, avgSpeeds, monthly } = useMemo(() => {
+     const dirs = data?.hourly?.wind_direction_10m ?? [];
+     const speeds = data?.hourly?.wind_speed_10m ?? [];
+     const times = data?.hourly?.time ?? [];
+     const labelsArr = highPrecision ? baseDirs16 : baseDirs8;
+     const countsMap: Record<string, number> = {};
+     const speedSumMap: Record<string, number> = {};
+     const monthly: Array<{ year: number; month: number; count: number; avgSpeed: number }> = [];
+
+     if (times.length && speeds.length && dirs.length) {
+       const buckets: Record<string, { count: number; speedSum: number }> = {};
+       times.forEach((iso, idx) => {
+         const d = new Date(iso);
+         if (Number.isNaN(d.getTime())) return;
+         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+         if (!buckets[key]) buckets[key] = { count: 0, speedSum: 0 };
+         const speed = speeds[idx] ?? 0;
+         buckets[key].count += 1;
+         buckets[key].speedSum += speed;
+       });
+
+       const keys = Object.keys(buckets).sort();
+       const last12 = keys.slice(-12);
+       last12.forEach((k) => {
+         const [y, m] = k.split("-");
+         const bucket = buckets[k];
+         monthly.push({
+           year: Number(y),
+           month: Number(m),
+           count: bucket.count,
+           avgSpeed: bucket.count ? bucket.speedSum / bucket.count : 0,
+         });
+       });
+     }
+
     labelsArr.forEach((d) => {
       countsMap[d] = 0;
       speedSumMap[d] = 0;
@@ -135,9 +164,10 @@ function App() {
       if (!c) return 0;
       return (speedSumMap[d] ?? 0) / c;
     });
+ 
+    return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr, monthly };
+   }, [data, highPrecision]);
 
-    return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr };
-  }, [data, highPrecision]);
 
    if (loading)
      return (
@@ -695,9 +725,156 @@ function App() {
         borderRadius: 16,
         border: "1px dashed rgba(148,163,184,0.5)",
         background: "rgba(15,23,42,0.6)",
-        minHeight: 200,
+        padding: "0.75rem",
+        display: "grid",
+        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        gap: "0.5rem",
       }}
-    />
+    >
+      {monthly.map((m, idx) => (
+        <div
+          key={`${m.year}-${m.month}-${idx}`}
+          style={{
+            borderRadius: 12,
+            border: "1px solid rgba(148,163,184,0.45)",
+            background: "rgba(15,23,42,0.98)",
+            padding: "0.45rem 0.5rem 0.55rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: 11,
+              color: "#e5e7eb",
+              marginBottom: 2,
+            }}
+          >
+            <span>
+              {m.year}-{String(m.month).padStart(2, "0")}
+            </span>
+            <span style={{ color: "#9ca3af" }}>{m.count}h</span>
+          </div>
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                paddingBottom: "100%",
+              }}
+            >
+              <svg
+                width="100%"
+                height="100%"
+                viewBox={`0 0 ${totalRadius * 2} ${totalRadius * 2}`}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ position: "absolute", inset: 0 }}
+              >
+              <circle
+                cx={center}
+                cy={center}
+                r={RADIUS + 4}
+                fill="rgba(15,23,42,0.95)"
+                stroke="rgba(148,163,184,0.45)"
+                strokeWidth={0.8}
+              />
+              <circle
+                cx={center}
+                cy={center}
+                r={INNER_RADIUS}
+                fill="rgba(15,23,42,0.9)"
+                stroke="rgba(148,163,184,0.4)"
+                strokeWidth={0.7}
+              />
+              {[0, 90, 180, 270].map((deg) => {
+                const rad = (deg * Math.PI) / 180;
+                const x1 = center + INNER_RADIUS * Math.cos(rad);
+                const y1 = center + INNER_RADIUS * Math.sin(rad);
+                const x2 = center + RADIUS * Math.cos(rad);
+                const y2 = center + RADIUS * Math.sin(rad);
+                return (
+                  <line
+                    key={deg}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke="rgba(148,163,184,0.45)"
+                    strokeWidth={0.6}
+                    strokeDasharray="2 4"
+                  />
+                );
+              })}
+              {labels.map((label, i) => {
+                const value = counts[i];
+                const frac = value / maxCount;
+                const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
+                const avgSpeed = avgSpeeds[i] ?? 0;
+                const fillColor = colorForSpeed(avgSpeed);
+
+                const count = labels.length;
+                const angleStep = (2 * Math.PI) / count;
+                const startAngle = -Math.PI / 2 + (i - 0.5) * angleStep;
+                const endAngle = startAngle + angleStep * 0.9;
+
+                const x1Inner = center + INNER_RADIUS * Math.cos(startAngle);
+                const y1Inner = center + INNER_RADIUS * Math.sin(startAngle);
+                const x1Outer = center + outerR * Math.cos(startAngle);
+                const y1Outer = center + outerR * Math.sin(startAngle);
+
+                const x2Inner = center + INNER_RADIUS * Math.cos(endAngle);
+                const y2Inner = center + INNER_RADIUS * Math.sin(endAngle);
+                const x2Outer = center + outerR * Math.cos(endAngle);
+                const y2Outer = center + outerR * Math.sin(endAngle);
+
+                const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+                const d = [
+                  `M ${x1Inner} ${y1Inner}`,
+                  `L ${x1Outer} ${y1Outer}`,
+                  `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2Outer} ${y2Outer}`,
+                  `L ${x2Inner} ${y2Inner}`,
+                  `A ${INNER_RADIUS} ${INNER_RADIUS} 0 ${largeArc} 0 ${x1Inner} ${y1Inner}`,
+                  "Z",
+                ].join(" ");
+
+                const midAngle = -Math.PI / 2 + i * angleStep;
+                const labelR = RADIUS + 10;
+                const lx = center + labelR * Math.cos(midAngle);
+                const ly = center + labelR * Math.sin(midAngle);
+
+                return (
+                  <g key={label}>
+                    <path d={d} fill={fillColor} />
+                    <text
+                      x={lx}
+                      y={ly}
+                      fontSize={7}
+                      textAnchor="middle"
+                      alignmentBaseline="middle"
+                      fill="#e5e7eb"
+                    >
+                      {label}
+                    </text>
+                  </g>
+                );
+              })}
+              </svg>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
     </div>
     </div>
   );
