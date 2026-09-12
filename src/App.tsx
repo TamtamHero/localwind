@@ -211,23 +211,23 @@ function App() {
   };
 
   return (
-     <div
-       style={{
-         minHeight: "100vh",
-         margin: 0,
-         padding: "1.25rem",
-         background: "radial-gradient(circle at top, #0f172a, #020617)",
-         color: "#e5e7eb",
-         fontFamily:
+      <div
+        style={{
+          minHeight: "100vh",
+          margin: 0,
+          padding: "1.25rem",
+          background: "radial-gradient(circle at top, #0f172a, #020617)",
+          color: "#e5e7eb",
+          fontFamily:
            "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-         display: "flex",
-         flexDirection: "column",
-       }}
-     >
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
        <div
          style={{
            width: "100%",
-           height: "100%",
+           maxWidth: 1200,
            background: "rgba(15,23,42,0.9)",
            borderRadius: 24,
            border: "1px solid rgba(148,163,184,0.25)",
@@ -631,9 +631,9 @@ function App() {
           <div
             style={{
               position: "absolute",
-              left: "50%",
-              bottom: 4,
-              transform: "translateX(-50%)",
+               left: "50%",
+               bottom: -32,
+               transform: "translateX(-50%)",
               background: "rgba(15,23,42,0.96)",
               borderRadius: 14,
               padding: "0.55rem 0.9rem",
