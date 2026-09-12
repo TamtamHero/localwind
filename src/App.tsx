@@ -632,7 +632,7 @@ function App() {
             style={{
               position: "absolute",
                left: "50%",
-               bottom: -32,
+               bottom: -52,
                transform: "translateX(-50%)",
               background: "rgba(15,23,42,0.96)",
               borderRadius: 14,
@@ -690,6 +690,14 @@ function App() {
         </div>
       </div>
     </div>
+    <div
+      style={{
+        borderRadius: 16,
+        border: "1px dashed rgba(148,163,184,0.5)",
+        background: "rgba(15,23,42,0.6)",
+        minHeight: 200,
+      }}
+    />
     </div>
     </div>
   );
