@@ -104,13 +104,31 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    loadForCoords(43.95998, 4.81797);
-  }, []);
+   useEffect(() => {
+     loadForCoords(43.95998, 4.81797);
+   }, []);
+
+   useEffect(() => {
+     if (typeof window === "undefined" || !window.matchMedia) return;
+     const mq = window.matchMedia("(orientation: portrait), (max-width: 820px)");
+     const update = () => setIsPortrait(mq.matches);
+     update();
+     if (mq.addEventListener) mq.addEventListener("change", update);
+     else mq.addListener(update);
+     return () => {
+       if (mq.removeEventListener) mq.removeEventListener("change", update);
+       else mq.removeListener(update);
+     };
+   }, []);
+
 
    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
    const [selectedMonthForChart, setSelectedMonthForChart] = useState<number | null>(null);
+   const [monthlyHover, setMonthlyHover] = useState<number | null>(null);
+   const [scaleSpeed, setScaleSpeed] = useState<number | null>(null);
+   const [relativeSpeed, setRelativeSpeed] = useState(false);
+   const [isPortrait, setIsPortrait] = useState(false);
 
 
    const { labels, counts, avgSpeeds, monthly, monthlySeries } = useMemo(() => {
@@ -186,6 +204,9 @@ function App() {
            maxCount: mMaxCount,
          });
        });
+
+       monthly.reverse();
+       monthlySeries.reverse();
      }
 
 
@@ -256,19 +277,6 @@ function App() {
   const activeIndex =
     selectedIndex != null ? selectedIndex : hoverIndex != null ? hoverIndex : null;
 
-  const activeLabel =
-    activeIndex != null && activeIndex >= 0 && activeIndex < labels.length
-      ? labels[activeIndex]
-      : null;
-  const activeCount =
-    activeIndex != null && activeIndex >= 0 && activeIndex < counts.length
-      ? counts[activeIndex]
-      : null;
-  const activeSpeed =
-    activeIndex != null && activeIndex >= 0 && activeIndex < avgSpeeds.length
-      ? avgSpeeds[activeIndex]
-      : null;
-
   const dataset =
     selectedMonthForChart != null && monthlySeries[selectedMonthForChart]
       ? monthlySeries[selectedMonthForChart]
@@ -278,19 +286,88 @@ function App() {
   const chartCounts = dataset.counts;
   const chartAvgSpeeds = dataset.avgSpeeds;
   const maxCount = dataset.maxCount;
+
+  const activeLabel =
+    activeIndex != null && activeIndex >= 0 && activeIndex < chartLabels.length
+      ? chartLabels[activeIndex]
+      : null;
+  const activeCount =
+    activeIndex != null && activeIndex >= 0 && activeIndex < chartCounts.length
+      ? chartCounts[activeIndex]
+      : null;
+  const activeSpeed =
+    activeIndex != null && activeIndex >= 0 && activeIndex < chartAvgSpeeds.length
+      ? chartAvgSpeeds[activeIndex]
+      : null;
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  const selectedMonth =
+    selectedMonthForChart != null ? monthly[selectedMonthForChart] : null;
+  const chartTitle = selectedMonth
+    ? `${monthNames[selectedMonth.month - 1]} ${selectedMonth.year}`
+    : "Last 365 days";
+  const chartTotalCount = selectedMonth
+    ? selectedMonth.count
+    : data?.hourly?.time?.length ?? 0;
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
    const miniHalf = RADIUS + 20;
 
 
-  const colorForSpeed = (speed: number) => {
-    const clamped = Math.max(0, Math.min(30, speed));
-    const t = clamped / 30;
-    const r = Math.round(255 * t);
-    const g = 0;
-    const b = Math.round(255 * (1 - t));
-    return `rgb(${r},${g},${b})`;
+  const hueStops: Array<[number, number]> = [
+    [0, 145],
+    [0.15, 145],
+    [0.35, 60],
+    [0.4, 60],
+    [0.6, 30],
+    [0.65, 30],
+    [0.85, 0],
+    [1, 0],
+  ];
+
+  const hueForT = (t: number) => {
+    for (let i = 0; i < hueStops.length - 1; i++) {
+      const [t0, h0] = hueStops[i];
+      const [t1, h1] = hueStops[i + 1];
+      if (t <= t1) {
+        const span = t1 - t0 || 1;
+        return h0 + (h1 - h0) * ((t - t0) / span);
+      }
+    }
+    return hueStops[hueStops.length - 1][1];
   };
+
+  const monthlyMaxSpeed = monthlySeries.reduce(
+    (max, series) => Math.max(max, ...series.avgSpeeds),
+    1
+  );
+  const maxSpeedForColor = relativeSpeed ? monthlyMaxSpeed : 30;
+
+  const colorForSpeed = (speed: number) => {
+    const clamped = Math.max(0, Math.min(maxSpeedForColor, speed));
+    const t = clamped / maxSpeedForColor;
+    const h = hueForT(t);
+    const s = 80 + (85 - 80) * t;
+    const l = 42 + (50 - 42) * t;
+    return `hsl(${h.toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%)`;
+  };
+
+  const speedGradient = Array.from({ length: 31 }, (_, i) =>
+    colorForSpeed((i / 30) * maxSpeedForColor)
+  ).join(", ");
 
   return (
       <div
@@ -317,10 +394,13 @@ function App() {
              "0 24px 80px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.8)",
            padding: "1.25rem 1.5rem 1.5rem",
            backdropFilter: "blur(18px)",
-           display: "grid",
-           gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)",
-           gap: "1.5rem",
-           alignItems: "stretch",
+            display: "grid",
+            gridTemplateColumns: isPortrait
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 2fr) minmax(0, 3fr)",
+            gap: "1.5rem",
+            alignItems: "stretch",
+
          }}
        >
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -373,7 +453,7 @@ function App() {
               }}
             >
               Each sector shows how often the wind blows from that direction.
-              Color encodes the average speed: blue for calm, red for strong winds.
+              Color encodes the average speed from green (low speed) to red (higher speed).
             </p>
           </div>
 
@@ -438,7 +518,7 @@ function App() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Load cached
+                  Load
                 </button>
               </div>
 
@@ -447,6 +527,7 @@ function App() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  flexWrap: "wrap",
                   gap: 12,
                 }}
               >
@@ -456,6 +537,8 @@ function App() {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
+                  height: 40,
+                  boxSizing: "border-box",
                   padding: "0.4rem 0.65rem",
                   borderRadius: 999,
                   background: "rgba(15,23,42,0.8)",
@@ -499,29 +582,102 @@ function App() {
               <span style={{ color: "#e5e7eb" }}>16-point precision</span>
             </label>
 
+            <button
+              onClick={() => setRelativeSpeed((prev) => !prev)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                boxSizing: "border-box",
+                width: 190,
+                padding: "0.4rem 0.65rem",
+                borderRadius: 999,
+                background: relativeSpeed
+                  ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
+                  : "rgba(15,23,42,0.8)",
+                border: relativeSpeed
+                  ? "1px solid rgba(129,140,248,0.9)"
+                  : "1px solid rgba(148,163,184,0.5)",
+                color: relativeSpeed ? "white" : "#e5e7eb",
+                fontSize: 13,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Speed Scale: {relativeSpeed ? "Relative" : "Absolute"}
+            </button>
+
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
+                flexDirection: "column",
+                gap: 4,
+                width: 165,
                 fontSize: 12,
                 color: "#9ca3af",
               }}
             >
-              <span>Speed scale</span>
               <div
                 style={{
-                  flexShrink: 0,
-                  width: 110,
+                  position: "relative",
+                  width: "100%",
                   height: 10,
                   borderRadius: 999,
-                  background:
-                    "linear-gradient(to right, #0ea5e9, #22c55e, #eab308, #ef4444)",
+                  background: `linear-gradient(to right, ${speedGradient})`,
                   boxShadow: "0 0 0 1px rgba(15,23,42,0.7)",
                 }}
-              />
-              <span style={{ opacity: 0.9 }}>0 km/h</span>
-              <span style={{ opacity: 0.9 }}>30+ km/h</span>
+              >
+                {scaleSpeed != null && (
+                  <>
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: `${(Math.max(0, Math.min(maxSpeedForColor, scaleSpeed)) / maxSpeedForColor) * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: 14,
+                        height: 14,
+                        borderRadius: 999,
+                        background: colorForSpeed(scaleSpeed),
+                        border: "2px solid #0f172a",
+                        boxShadow: "0 0 8px rgba(0,0,0,0.6)",
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        left: `${(Math.max(0, Math.min(maxSpeedForColor, scaleSpeed)) / maxSpeedForColor) * 100}%`,
+                        transform: "translateX(-50%)",
+                        padding: "1px 5px",
+                        borderRadius: 6,
+                        background: "rgba(15,23,42,0.98)",
+                        border: `1px solid ${colorForSpeed(scaleSpeed)}`,
+                        color: "#e5e7eb",
+                        fontSize: 10,
+                        whiteSpace: "nowrap",
+                        zIndex: 30,
+                      }}
+                    >
+                      {scaleSpeed.toFixed(1)} km/h
+                    </div>
+                  </>
+                )}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ opacity: 0.9 }}>0 km/h</span>
+                <span style={{ opacity: 0.9 }}>
+                  {relativeSpeed
+                    ? `${maxSpeedForColor.toFixed(0)} km/h`
+                    : "30+ km/h"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -548,6 +704,7 @@ function App() {
              alignItems: "center",
              justifyContent: "center",
              width: "100%",
+             marginBottom: isPortrait ? 80 : 0,
            }}
          >
            <div
@@ -572,6 +729,22 @@ function App() {
                 <stop offset="35%" stopColor="#38bdf8" stopOpacity={0.2} />
                 <stop offset="100%" stopColor="#020617" stopOpacity={0} />
               </radialGradient>
+              <pattern
+                id="selectedStripes"
+                width="6"
+                height="6"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="6"
+                  stroke="rgba(0,0,0,0.7)"
+                  strokeWidth="2"
+                />
+              </pattern>
             </defs>
 
             <circle
@@ -669,9 +842,11 @@ function App() {
                   key={label}
                   onMouseEnter={() => {
                     setHoverIndex(i);
+                    setScaleSpeed(avgSpeed);
                   }}
                   onMouseLeave={() => {
                     setHoverIndex(null);
+                    setScaleSpeed(null);
                   }}
                   onClick={() => {
                     setSelectedIndex((prev) => (prev === i ? null : i));
@@ -681,10 +856,13 @@ function App() {
                   <path
                     d={d}
                     fill={fillColor}
-                    stroke={isSelected ? "#f97316" : isHovered ? "#f9fafb" : "#020617"}
-                    strokeWidth={isSelected ? 1.2 : isHovered ? 1 : 0.6}
+                    stroke={isHovered ? "#f9fafb" : "#020617"}
+                    strokeWidth={isHovered ? 1 : 0.6}
                     style={{ opacity: isSelected || isHovered ? 1 : 0.8 }}
                   />
+                  {isSelected && (
+                    <path d={d} fill="url(#selectedStripes)" pointerEvents="none" />
+                  )}
                   <text
                     x={lx}
                     y={ly}
@@ -738,16 +916,19 @@ function App() {
                 color: "#e5e7eb",
               }}
             >
+              <div style={{ fontSize: 10, color: "#93c5fd", letterSpacing: 0.02 }}>
+                {chartTitle}
+              </div>
               <div style={{ fontWeight: 600 }}>
                 {activeLabel ?? "No sector selected"}
               </div>
               <div style={{ color: "#9ca3af" }}>
                 <div>
                   Frequency: <strong>{activeCount ?? "–"}</strong>
-                  {activeCount != null && data?.hourly?.time && (
+                  {activeCount != null && chartTotalCount > 0 && (
                     <span>
                       {" "}(
-                      {((activeCount / data.hourly.time.length) * 100).toFixed(1)}%
+                      {((activeCount / chartTotalCount) * 100).toFixed(1)}%
                       )
                     </span>
                   )}
@@ -797,8 +978,11 @@ function App() {
           avgSpeeds,
           maxCount: Math.max(1, ...counts),
         };
+        const isHovered = monthlyHover === idx;
         const bg = isSelected
           ? "rgba(30,64,175,0.95)"
+          : isHovered
+          ? "rgba(30,41,59,0.98)"
           : "rgba(15,23,42,0.98)";
         return (
         <div
@@ -806,6 +990,8 @@ function App() {
            onClick={() =>
              setSelectedMonthForChart((prev) => (prev === idx ? null : idx))
            }
+           onMouseEnter={() => setMonthlyHover(idx)}
+           onMouseLeave={() => setMonthlyHover(null)}
 
           style={{
             borderRadius: 12,
@@ -815,6 +1001,7 @@ function App() {
             display: "flex",
             flexDirection: "column",
             gap: 2,
+            cursor: "pointer",
             transition: "background 150ms ease, box-shadow 150ms ease",
             zIndex: isSelected ? 2 : 1,
             boxShadow:
@@ -834,7 +1021,7 @@ function App() {
             }}
           >
             <span>
-              {m.year}-{String(m.month).padStart(2, "0")}
+              {monthNames[m.month - 1]} {m.year}
             </span>
             <span style={{ color: "#9ca3af" }}>{m.count}h</span>
           </div>
@@ -933,7 +1120,12 @@ function App() {
                 const ly = center + labelR * Math.sin(midAngle);
 
                 return (
-                  <g key={label}>
+                  <g
+                    key={label}
+                    onMouseEnter={() => setScaleSpeed(avgSpeed)}
+                    onMouseLeave={() => setScaleSpeed(null)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <path d={d} fill={fillColor} />
                     <text
                       x={lx}
