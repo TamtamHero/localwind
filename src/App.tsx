@@ -108,10 +108,12 @@ function App() {
     loadForCoords(43.95998, 4.81797);
   }, []);
 
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+   const [selectedMonthForChart, setSelectedMonthForChart] = useState<number | null>(null);
 
-   const { labels, counts, avgSpeeds, monthly } = useMemo(() => {
+
+   const { labels, counts, avgSpeeds, monthly, monthlySeries } = useMemo(() => {
      const dirs = data?.hourly?.wind_direction_10m ?? [];
      const speeds = data?.hourly?.wind_speed_10m ?? [];
      const times = data?.hourly?.time ?? [];
@@ -119,19 +121,45 @@ function App() {
      const countsMap: Record<string, number> = {};
      const speedSumMap: Record<string, number> = {};
      const monthly: Array<{ year: number; month: number; count: number; avgSpeed: number }> = [];
-
+     const monthlySeries: Array<{
+       labels: (typeof labelsArr)[number][];
+       counts: number[];
+       avgSpeeds: number[];
+       maxCount: number;
+     }> = [];
+ 
      if (times.length && speeds.length && dirs.length) {
-       const buckets: Record<string, { count: number; speedSum: number }> = {};
+       const buckets: Record<
+         string,
+         {
+           count: number;
+           speedSum: number;
+           dirCounts: Record<string, number>;
+           dirSpeedSums: Record<string, number>;
+         }
+       > = {};
+ 
        times.forEach((iso, idx) => {
          const d = new Date(iso);
          if (Number.isNaN(d.getTime())) return;
          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-         if (!buckets[key]) buckets[key] = { count: 0, speedSum: 0 };
+         if (!buckets[key]) {
+           buckets[key] = {
+             count: 0,
+             speedSum: 0,
+             dirCounts: {},
+             dirSpeedSums: {},
+           };
+         }
          const speed = speeds[idx] ?? 0;
+         const dirLabel = degreeToCompass(dirs[idx] ?? 0, highPrecision);
          buckets[key].count += 1;
          buckets[key].speedSum += speed;
+         buckets[key].dirCounts[dirLabel] = (buckets[key].dirCounts[dirLabel] ?? 0) + 1;
+         buckets[key].dirSpeedSums[dirLabel] =
+           (buckets[key].dirSpeedSums[dirLabel] ?? 0) + speed;
        });
-
+ 
        const keys = Object.keys(buckets).sort();
        const last12 = keys.slice(-12);
        last12.forEach((k) => {
@@ -143,8 +171,23 @@ function App() {
            count: bucket.count,
            avgSpeed: bucket.count ? bucket.speedSum / bucket.count : 0,
          });
+ 
+         const mCounts = labelsArr.map((label) => bucket.dirCounts[label] ?? 0);
+         const mAvgSpeeds = labelsArr.map((label, i) => {
+           const c = mCounts[i];
+           if (!c) return 0;
+           return (bucket.dirSpeedSums[label] ?? 0) / c;
+         });
+         const mMaxCount = Math.max(1, ...mCounts);
+         monthlySeries.push({
+           labels: labelsArr.slice(),
+           counts: mCounts,
+           avgSpeeds: mAvgSpeeds,
+           maxCount: mMaxCount,
+         });
        });
      }
+
 
     labelsArr.forEach((d) => {
       countsMap[d] = 0;
@@ -165,7 +208,7 @@ function App() {
       return (speedSumMap[d] ?? 0) / c;
     });
  
-    return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr, monthly };
+    return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr, monthly, monthlySeries };
    }, [data, highPrecision]);
 
 
@@ -226,7 +269,15 @@ function App() {
       ? avgSpeeds[activeIndex]
       : null;
 
-  const maxCount = Math.max(1, ...counts);
+  const dataset =
+    selectedMonthForChart != null && monthlySeries[selectedMonthForChart]
+      ? monthlySeries[selectedMonthForChart]
+      : { labels, counts, avgSpeeds, maxCount: Math.max(1, ...counts) };
+
+  const chartLabels = dataset.labels;
+  const chartCounts = dataset.counts;
+  const chartAvgSpeeds = dataset.avgSpeeds;
+  const maxCount = dataset.maxCount;
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
 
@@ -569,11 +620,11 @@ function App() {
               );
             })}
 
-            {labels.map((label, i) => {
-              const value = counts[i];
+            {chartLabels.map((label, i) => {
+              const value = chartCounts[i];
               const frac = value / maxCount;
               const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
-              const avgSpeed = avgSpeeds[i] ?? 0;
+              const avgSpeed = chartAvgSpeeds[i] ?? 0;
               const fillColor = colorForSpeed(avgSpeed);
 
                const count = labels.length;
@@ -722,26 +773,53 @@ function App() {
     </div>
     <div
       style={{
+        position: "relative",
         borderRadius: 16,
         border: "1px dashed rgba(148,163,184,0.5)",
         background: "rgba(15,23,42,0.6)",
         padding: "0.75rem",
-        display: "grid",
-        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-        gap: "0.5rem",
       }}
     >
-      {monthly.map((m, idx) => (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: "0.5rem",
+          alignItems: "start",
+        }}
+      >
+      {monthly.map((m, idx) => {
+        const isSelected = selectedMonthForChart === idx;
+        const series = monthlySeries[idx] ?? {
+          labels,
+          counts,
+          avgSpeeds,
+          maxCount: Math.max(1, ...counts),
+        };
+        const bg = isSelected
+          ? "rgba(30,64,175,0.95)"
+          : "rgba(15,23,42,0.98)";
+        return (
         <div
           key={`${m.year}-${m.month}-${idx}`}
+           onClick={() =>
+             setSelectedMonthForChart((prev) => (prev === idx ? null : idx))
+           }
+
           style={{
             borderRadius: 12,
             border: "1px solid rgba(148,163,184,0.45)",
-            background: "rgba(15,23,42,0.98)",
+            background: bg,
             padding: "0.45rem 0.5rem 0.55rem",
             display: "flex",
             flexDirection: "column",
             gap: 4,
+            transition: "background 150ms ease, box-shadow 150ms ease",
+            zIndex: isSelected ? 2 : 1,
+            boxShadow:
+              isSelected
+                ? "0 6px 18px rgba(15,23,42,0.8)"
+                : "none",
           }}
         >
           <div
@@ -815,14 +893,14 @@ function App() {
                   />
                 );
               })}
-              {labels.map((label, i) => {
-                const value = counts[i];
-                const frac = value / maxCount;
+              {series.labels.map((label, i) => {
+                const value = series.counts[i];
+                const frac = value / series.maxCount;
                 const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
-                const avgSpeed = avgSpeeds[i] ?? 0;
+                const avgSpeed = series.avgSpeeds[i] ?? 0;
                 const fillColor = colorForSpeed(avgSpeed);
 
-                const count = labels.length;
+                const count = series.labels.length;
                 const angleStep = (2 * Math.PI) / count;
                 const startAngle = -Math.PI / 2 + (i - 0.5) * angleStep;
                 const endAngle = startAngle + angleStep * 0.9;
@@ -873,7 +951,10 @@ function App() {
             </div>
           </div>
         </div>
-      ))}
+       );
+       })}
+
+    </div>
     </div>
     </div>
     </div>
