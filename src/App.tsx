@@ -978,9 +978,10 @@ function App() {
                   style={{
                     padding: "0.45rem 0.9rem",
                     borderRadius: 999,
-                    border: "1px solid rgba(148,163,184,0.6)",
-                    background: "rgba(15,23,42,0.95)",
-                    color: "#e5e7eb",
+                    border: "1px solid rgba(129,140,248,0.9)",
+                    background:
+                      "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))",
+                    color: "white",
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: "pointer",
