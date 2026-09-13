@@ -77,16 +77,34 @@ const INNER_RADIUS = 20;
 
 function Tooltip({
   text,
+  portrait = false,
   children,
 }: {
   text: string;
+  portrait?: boolean;
   children: React.ReactNode;
 }) {
   const [show, setShow] = useState(false);
+  const [left, setLeft] = useState<number | null>(null);
   const timer = useRef<number | null>(null);
 
-  const handleEnter = () => {
-    timer.current = window.setTimeout(() => setShow(true), 600);
+  const handleEnter = (e: React.MouseEvent<HTMLSpanElement>) => {
+    const el = e.currentTarget;
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      if (portrait) {
+        const rect = el.getBoundingClientRect();
+        const width = Math.min(230, window.innerWidth - 16);
+        let l = window.innerWidth / 2 - rect.left;
+        const minL = width / 2 + 8 - rect.left;
+        const maxL = window.innerWidth - width / 2 - 8 - rect.left;
+        l = Math.max(minL, Math.min(maxL, l));
+        setLeft(l);
+      } else {
+        setLeft(null);
+      }
+      setShow(true);
+    }, 600);
   };
   const handleLeave = () => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -105,9 +123,10 @@ function Tooltip({
           style={{
             position: "absolute",
             bottom: "calc(100% + 8px)",
-            left: "50%",
+            left: left != null ? left : "50%",
             transform: "translateX(-50%)",
-            width: 230,
+            width: "max-content",
+            maxWidth: portrait ? "calc(100vw - 1.2rem)" : 230,
             padding: "6px 10px",
             borderRadius: 10,
             background: "rgba(15,23,42,0.98)",
@@ -232,6 +251,7 @@ function App() {
    const [useGusts, setUseGusts] = useState(false);
    const [isPortrait, setIsPortrait] = useState(false);
    const [showMap, setShowMap] = useState(false);
+   const [showFullDescription, setShowFullDescription] = useState(false);
    const [searchQuery, setSearchQuery] = useState("");
    const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
    const [searchLoading, setSearchLoading] = useState(false);
@@ -726,7 +746,7 @@ function App() {
                 letterSpacing: 0.02,
               }}
             >
-              Wind rose for the last 365 days
+              Wind rose for last 365 days
             </h1>
             <p
               style={{
@@ -734,6 +754,14 @@ function App() {
                 fontSize: 14,
                 lineHeight: 1.5,
                 color: "#9ca3af",
+                ...(isPortrait && !showFullDescription
+                  ? {
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }
+                  : {}),
               }}
             >
               A wind rose summarizing hourly wind measurements from the last
@@ -742,6 +770,22 @@ function App() {
               means more frequent. Color shows the average wind speed for that
               direction, from green (calm) to red (strong).
             </p>
+            {isPortrait && (
+              <button
+                onClick={() => setShowFullDescription((v) => !v)}
+                style={{
+                  marginTop: 4,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "#93c5fd",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {showFullDescription ? "Read less" : "Read more"}
+              </button>
+            )}
           </div>
 
             <div
@@ -840,7 +884,7 @@ function App() {
                 }}
               >
 
-              <Tooltip text="Group wind directions into 8 or 16 compass sectors.">
+              <Tooltip text="Group wind directions into 8 or 16 compass sectors." portrait={isPortrait}>
               <label
                 style={{
                   display: "inline-flex",
@@ -871,7 +915,7 @@ function App() {
             </label>
             </Tooltip>
 
-            <Tooltip text="Absolute uses a fixed km/h range; Relative scales colours to the strongest month.">
+            <Tooltip text="Absolute uses a fixed km/h range; Relative scales colours to the strongest month." portrait={isPortrait}>
             <button
               onClick={() => setRelativeSpeed((prev) => !prev)}
               style={{
@@ -898,7 +942,7 @@ function App() {
             </button>
             </Tooltip>
 
-            <Tooltip text="How each sector's speed is summarised: average, median, or maximum.">
+            <Tooltip text="How each sector's speed is summarised: average, median, or maximum." portrait={isPortrait}>
             <button
               onClick={() =>
                 setMetric((prev) =>
@@ -944,7 +988,7 @@ function App() {
             </button>
             </Tooltip>
 
-            <Tooltip text="Plot mean wind speed or wind gusts.">
+            <Tooltip text="Plot mean wind speed or wind gusts." portrait={isPortrait}>
             <button
               onClick={() => setUseGusts((prev) => !prev)}
               style={{
