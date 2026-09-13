@@ -75,6 +75,59 @@ const INNER_RADIUS = 20;
   return baseDirs8[idx];
 }
 
+function Tooltip({
+  text,
+  children,
+}: {
+  text: string;
+  children: React.ReactNode;
+}) {
+  const [show, setShow] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  const handleEnter = () => {
+    timer.current = window.setTimeout(() => setShow(true), 600);
+  };
+  const handleLeave = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    setShow(false);
+  };
+
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
+      {children}
+      {show && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 230,
+            padding: "6px 10px",
+            borderRadius: 10,
+            background: "rgba(15,23,42,0.98)",
+            border: "1px solid rgba(148,163,184,0.5)",
+            color: "#e5e7eb",
+            fontSize: 12,
+            lineHeight: 1.4,
+            textAlign: "center",
+            boxShadow: "0 10px 25px rgba(15,23,42,0.9)",
+            zIndex: 50,
+            pointerEvents: "none",
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function App() {
   const [data, setData] = useState<WindResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +147,7 @@ function App() {
 
       const CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
       if (canUseLS) {
-        const cacheKey = "windwatcher:v2:" + key;
+        const cacheKey = "localwind:v2:" + key;
         const cached = window.localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -138,7 +191,7 @@ function App() {
       if (canUseLS) {
         try {
           window.localStorage.setItem(
-            "windwatcher:v2:" + key,
+            "localwind:v2:" + key,
             JSON.stringify({ savedAt: Date.now(), data: json })
           );
         } catch {
@@ -787,6 +840,7 @@ function App() {
                 }}
               >
 
+              <Tooltip text="Group wind directions into 8 or 16 compass sectors.">
               <label
                 style={{
                   display: "inline-flex",
@@ -815,7 +869,9 @@ function App() {
                 {highPrecision ? "16" : "8"}-point precision
               </span>
             </label>
+            </Tooltip>
 
+            <Tooltip text="Absolute uses a fixed km/h range; Relative scales colours to the strongest month.">
             <button
               onClick={() => setRelativeSpeed((prev) => !prev)}
               style={{
@@ -840,7 +896,9 @@ function App() {
             >
               Speed Scale: {relativeSpeed ? "Relative" : "Absolute"}
             </button>
+            </Tooltip>
 
+            <Tooltip text="How each sector's speed is summarised: average, median, or maximum.">
             <button
               onClick={() =>
                 setMetric((prev) =>
@@ -884,7 +942,9 @@ function App() {
                 ? "Median"
                 : "Max"}
             </button>
+            </Tooltip>
 
+            <Tooltip text="Plot mean wind speed or wind gusts.">
             <button
               onClick={() => setUseGusts((prev) => !prev)}
               style={{
@@ -909,6 +969,7 @@ function App() {
             >
               Data: {useGusts ? "Gusts" : "Wind"}
             </button>
+            </Tooltip>
 
           </div>
 

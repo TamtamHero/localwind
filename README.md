@@ -1,6 +1,6 @@
-# Windwatcher
+# LocalWind
 
-Windwatcher is a small web app that turns a year of hourly weather observations
+LocalWind is a small web app that turns a year of hourly weather observations
 into an easy-to-read **wind rose**. Give it a pair of coordinates (or pick a spot
 on the map) and it shows how the wind behaves at that place over the last 365
 days: where it comes from, how often, and how strong it typically is.
