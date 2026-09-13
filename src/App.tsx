@@ -40,23 +40,151 @@ const baseDirs16 = [
   "NNW",
 ] as const;
 
-const dirFullNames: Record<string, string> = {
-  N: "North",
-  NNE: "North-northeast",
-  NE: "Northeast",
-  ENE: "East-northeast",
-  E: "East",
-  ESE: "East-southeast",
-  SE: "Southeast",
-  SSE: "South-southeast",
-  S: "South",
-  SSW: "South-southwest",
-  SW: "Southwest",
-  WSW: "West-southwest",
-  W: "West",
-  WNW: "West-northwest",
-  NW: "Northwest",
-  NNW: "North-northwest",
+type Lang = "en" | "fr";
+
+const STRINGS = {
+  en: {
+    title: "Wind rose for last 365 days",
+    description:
+      "A wind rose summarizing hourly wind measurements from the last 365 days. Each wedge points to the direction the wind blows from and its length shows how often that direction occurs — longer means more frequent. Color shows the average wind speed for that direction, from green (calm) to red (strong).",
+    readMore: "Read more",
+    readLess: "Read less",
+    currentCoords: "Current coordinates:",
+    map: "Map",
+    load: "Load",
+    precision: (n: number) => `${n}-point precision`,
+    speedScaleLabel: (v: string) => `Speed Scale: ${v}`,
+    absolute: "Absolute",
+    relative: "Relative",
+    valuesLabel: (v: string) => `Values: ${v}`,
+    average: "Average",
+    median: "Median",
+    max: "Max",
+    dataLabel: (v: string) => `Data: ${v}`,
+    wind: "Wind",
+    gusts: "Gusts",
+    tipPrecision: "Group wind directions into 8 or 16 compass sectors.",
+    tipScale:
+      "Absolute uses a fixed km/h range; Relative scales colours to the strongest month.",
+    tipValues:
+      "How each sector's speed is summarised: average, median, or maximum.",
+    tipData: "Plot mean wind speed or wind gusts.",
+    last365: "Last 365 days",
+    noSector: "No sector selected",
+    frequency: "Frequency",
+    searchPlaceholder: "Search a place (e.g. Paris, Montpellier)",
+    searching: "Searching…",
+    cancel: "Cancel",
+    loading: "Loading...",
+    errorLabel: "Error",
+    errInvalidFormat: "Please enter coordinates as 'lat, lon'",
+    errInvalidValues: "Invalid latitude/longitude values",
+    errFetch: "Failed to fetch data from Open-Meteo",
+    errUnknown: "Unknown error",
+    months: [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ],
+    directions: {
+      N: "North",
+      NNE: "North-northeast",
+      NE: "Northeast",
+      ENE: "East-northeast",
+      E: "East",
+      ESE: "East-southeast",
+      SE: "Southeast",
+      SSE: "South-southeast",
+      S: "South",
+      SSW: "South-southwest",
+      SW: "Southwest",
+      WSW: "West-southwest",
+      W: "West",
+      WNW: "West-northwest",
+      NW: "Northwest",
+      NNW: "North-northwest",
+    } as Record<string, string>,
+  },
+  fr: {
+    title: "Rose des vents des 365 derniers jours",
+    description:
+      "Une rose des vents résumant les mesures horaires du vent des 365 derniers jours. Chaque secteur pointe la direction d'où vient le vent et sa longueur indique sa fréquence — plus le secteur est long, plus le vent souffle souvent de cette direction. La couleur représente la vitesse moyenne du vent pour cette direction, du vert (calme) au rouge (fort).",
+    readMore: "Lire plus",
+    readLess: "Lire moins",
+    currentCoords: "Coordonnées actuelles :",
+    map: "Carte",
+    load: "Charger",
+    precision: (n: number) => `Précision : ${n} points`,
+    speedScaleLabel: (v: string) => `Échelle : ${v}`,
+    absolute: "Absolue",
+    relative: "Relative",
+    valuesLabel: (v: string) => `Valeurs : ${v}`,
+    average: "Moyenne",
+    median: "Médiane",
+    max: "Max",
+    dataLabel: (v: string) => `Données : ${v}`,
+    wind: "Vent",
+    gusts: "Rafales",
+    tipPrecision: "Regrouper les directions du vent en 8 ou 16 secteurs.",
+    tipScale:
+      "Absolue utilise une plage fixe en km/h ; Relative adapte les couleurs au mois le plus fort.",
+    tipValues:
+      "Comment la vitesse de chaque secteur est résumée : moyenne, médiane ou maximum.",
+    tipData: "Afficher la vitesse moyenne du vent ou les rafales.",
+    last365: "365 derniers jours",
+    noSector: "Aucun secteur sélectionné",
+    frequency: "Fréquence",
+    searchPlaceholder: "Rechercher un lieu (ex. Paris, Montpellier)",
+    searching: "Recherche…",
+    cancel: "Annuler",
+    loading: "Chargement...",
+    errorLabel: "Erreur",
+    errInvalidFormat: "Veuillez saisir les coordonnées sous la forme « lat, lon »",
+    errInvalidValues: "Valeurs de latitude/longitude invalides",
+    errFetch: "Échec de la récupération des données depuis Open-Meteo",
+    errUnknown: "Erreur inconnue",
+    months: [
+      "Janvier",
+      "Février",
+      "Mars",
+      "Avril",
+      "Mai",
+      "Juin",
+      "Juillet",
+      "Août",
+      "Septembre",
+      "Octobre",
+      "Novembre",
+      "Décembre",
+    ],
+    directions: {
+      N: "Nord",
+      NNE: "Nord-nord-est",
+      NE: "Nord-est",
+      ENE: "Est-nord-est",
+      E: "Est",
+      ESE: "Est-sud-est",
+      SE: "Sud-est",
+      SSE: "Sud-sud-est",
+      S: "Sud",
+      SSW: "Sud-sud-ouest",
+      SW: "Sud-ouest",
+      WSW: "Ouest-sud-ouest",
+      W: "Ouest",
+      WNW: "Ouest-nord-ouest",
+      NW: "Nord-ouest",
+      NNW: "Nord-nord-ouest",
+    } as Record<string, string>,
+  },
 };
 
 const RADIUS = 120;
@@ -148,6 +276,20 @@ function Tooltip({
 }
 
 function App() {
+  const lang: Lang = useMemo(() => {
+    if (typeof navigator !== "undefined") {
+      if ((navigator.language || "").toLowerCase().startsWith("fr")) return "fr";
+    }
+    return "en";
+  }, []);
+  const t = STRINGS[lang];
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = lang;
+    }
+  }, [lang]);
+
   const [data, setData] = useState<WindResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,7 +345,7 @@ function App() {
       url.searchParams.set("timezone", "UTC");
 
       const res = await fetch(url.toString());
-      if (!res.ok) throw new Error("Failed to fetch data from Open-Meteo");
+      if (!res.ok) throw new Error(t.errFetch);
       const json = (await res.json()) as WindResponse;
       setData(json);
 
@@ -217,7 +359,7 @@ function App() {
         }
       }
     } catch (e: any) {
-      setError(e?.message ?? "Unknown error");
+      setError(e?.message ?? t.errUnknown);
       setData(null);
     } finally {
       setLoading(false);
@@ -305,11 +447,11 @@ function App() {
        const row = document.createElement("div");
        row.style.cssText = "display:flex;gap:6px;justify-content:flex-end;";
        const cancelBtn = document.createElement("button");
-       cancelBtn.textContent = "Cancel";
+       cancelBtn.textContent = t.cancel;
        cancelBtn.style.cssText =
          "padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.6);background:rgba(15,23,42,0.95);color:#e5e7eb;font-size:12px;cursor:pointer;";
        const loadBtn = document.createElement("button");
-       loadBtn.textContent = "Load";
+       loadBtn.textContent = t.load;
        loadBtn.style.cssText =
          "padding:4px 10px;border-radius:999px;border:1px solid rgba(129,140,248,0.9);background:linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98));color:#fff;font-size:12px;cursor:pointer;";
        cancelBtn.addEventListener("click", () => {
@@ -366,12 +508,14 @@ function App() {
      if (!q) return;
      setSearchLoading(true);
      try {
-       const params = new URLSearchParams({
-         format: "jsonv2",
-         limit: "10",
-         addressdetails: "1",
-         q,
-       });
+         const params = new URLSearchParams({
+           format: "jsonv2",
+           limit: "10",
+           addressdetails: "1",
+           "accept-language": lang,
+           q,
+         });
+
        const map = mapRef.current;
        if (map) {
          const b = map.getBounds();
@@ -570,7 +714,7 @@ function App() {
            justifyContent: "center",
          }}
        >
-         Loading...
+         {t.loading}
        </div>
      );
 
@@ -590,7 +734,7 @@ function App() {
            justifyContent: "center",
          }}
        >
-         Error: {error}
+         {t.errorLabel}: {error}
        </div>
      );
 
@@ -630,25 +774,12 @@ function App() {
   const displayedScaleSpeed =
     scaleSpeed != null ? scaleSpeed : selectedSpeed;
 
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  const monthNames = t.months;
   const selectedMonth =
     selectedMonthForChart != null ? monthly[selectedMonthForChart] : null;
   const chartTitle = selectedMonth
     ? `${monthNames[selectedMonth.month - 1]} ${selectedMonth.year}`
-    : "Last 365 days";
+    : t.last365;
   const chartTotalCount = selectedMonth
     ? selectedMonth.count
     : data?.hourly?.time?.length ?? 0;
@@ -757,7 +888,7 @@ function App() {
                 letterSpacing: 0.02,
               }}
             >
-              Wind rose for last 365 days
+              {t.title}
             </h1>
             <p
               onClick={
@@ -781,11 +912,7 @@ function App() {
                   : {}),
               }}
             >
-              A wind rose summarizing hourly wind measurements from the last
-              365 days. Each wedge points to the direction the wind blows from
-              and its length shows how often that direction occurs — longer
-              means more frequent. Color shows the average wind speed for that
-              direction, from green (calm) to red (strong).
+              {t.description}
             </p>
             {isPortrait && (
               <button
@@ -800,7 +927,7 @@ function App() {
                   cursor: "pointer",
                 }}
               >
-                {showFullDescription ? "Read less" : "Read more"}
+                {showFullDescription ? t.readLess : t.readMore}
               </button>
             )}
           </div>
@@ -814,7 +941,7 @@ function App() {
               }}
             >
               <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                Current coordinates: {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
+                {t.currentCoords} {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
               </div>
               <div
                 style={{
@@ -857,19 +984,19 @@ function App() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Map
+                  {t.map}
                 </button>
                 <button
                   onClick={() => {
                     const parts = coordsInput.split(/[,\s]+/).filter(Boolean);
                     if (parts.length < 2) {
-                      setError("Please enter coordinates as 'lat, lon'");
+                      setError(t.errInvalidFormat);
                       return;
                     }
                     const lat = Number(parts[0]);
                     const lon = Number(parts[1]);
                     if (!isFinite(lat) || !isFinite(lon)) {
-                      setError("Invalid latitude/longitude values");
+                      setError(t.errInvalidValues);
                       return;
                     }
                     loadForCoords(lat, lon);
@@ -887,7 +1014,7 @@ function App() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Load
+                  {t.load}
                 </button>
               </div>
 
@@ -901,7 +1028,7 @@ function App() {
                 }}
               >
 
-              <Tooltip text="Group wind directions into 8 or 16 compass sectors." portrait={isPortrait}>
+              <Tooltip text={t.tipPrecision} portrait={isPortrait}>
               <label
                 style={{
                   display: "inline-flex",
@@ -927,12 +1054,12 @@ function App() {
                 style={{ display: "none" }}
               />
               <span style={{ color: highPrecision ? "white" : "#e5e7eb" }}>
-                {highPrecision ? "16" : "8"}-point precision
+                {t.precision(highPrecision ? 16 : 8)}
               </span>
             </label>
             </Tooltip>
 
-            <Tooltip text="Absolute uses a fixed km/h range; Relative scales colours to the strongest month." portrait={isPortrait}>
+            <Tooltip text={t.tipScale} portrait={isPortrait}>
             <button
               onClick={() => setRelativeSpeed((prev) => !prev)}
               style={{
@@ -955,11 +1082,11 @@ function App() {
                 whiteSpace: "nowrap",
               }}
             >
-              Speed Scale: {relativeSpeed ? "Relative" : "Absolute"}
+              {t.speedScaleLabel(relativeSpeed ? t.relative : t.absolute)}
             </button>
             </Tooltip>
 
-            <Tooltip text="How each sector's speed is summarised: average, median, or maximum." portrait={isPortrait}>
+            <Tooltip text={t.tipValues} portrait={isPortrait}>
             <button
               onClick={() =>
                 setMetric((prev) =>
@@ -996,16 +1123,17 @@ function App() {
                 whiteSpace: "nowrap",
               }}
             >
-              Values:{" "}
-              {metric === "average"
-                ? "Average"
-                : metric === "median"
-                ? "Median"
-                : "Max"}
+              {t.valuesLabel(
+                metric === "average"
+                  ? t.average
+                  : metric === "median"
+                  ? t.median
+                  : t.max
+              )}
             </button>
             </Tooltip>
 
-            <Tooltip text="Plot mean wind speed or wind gusts." portrait={isPortrait}>
+            <Tooltip text={t.tipData} portrait={isPortrait}>
             <button
               onClick={() => setUseGusts((prev) => !prev)}
               style={{
@@ -1028,7 +1156,7 @@ function App() {
                 whiteSpace: "nowrap",
               }}
             >
-              Data: {useGusts ? "Gusts" : "Wind"}
+              {t.dataLabel(useGusts ? t.gusts : t.wind)}
             </button>
             </Tooltip>
 
@@ -1275,11 +1403,11 @@ function App() {
             </div>
             <div style={{ fontWeight: 600 }}>
               {activeLabel
-                ? dirFullNames[activeLabel] ?? activeLabel
-                : "No sector selected"}
+                ? t.directions[activeLabel] ?? activeLabel
+                : t.noSector}
             </div>
             <div style={{ color: "#9ca3af" }}>
-              Frequency:{" "}
+              {t.frequency}{" "}
               <strong>
                 {activeCount != null ? `${activeCount}h` : "–"}
               </strong>
@@ -1645,7 +1773,7 @@ function App() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") runSearch();
                 }}
-                placeholder="Search a place (e.g. Paris, Montpellier)"
+                placeholder={t.searchPlaceholder}
                 style={{
                   flex: "1 1 0",
                   minWidth: 0,
@@ -1660,7 +1788,7 @@ function App() {
               />
               {searchLoading && (
                 <span style={{ alignSelf: "center", fontSize: 12, color: "#9ca3af" }}>
-                  Searching…
+                  {t.searching}
                 </span>
               )}
             </div>
