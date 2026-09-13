@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 type WindResponse = {
   latitude?: number;
@@ -121,7 +123,6 @@ function App() {
      };
    }, []);
 
-
    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
    const [selectedMonthForChart, setSelectedMonthForChart] = useState<number | null>(null);
@@ -129,6 +130,89 @@ function App() {
    const [scaleSpeed, setScaleSpeed] = useState<number | null>(null);
    const [relativeSpeed, setRelativeSpeed] = useState(false);
    const [isPortrait, setIsPortrait] = useState(false);
+   const [showMap, setShowMap] = useState(false);
+   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+   const mapRef = useRef<L.Map | null>(null);
+
+   useEffect(() => {
+     if (!showMap || !mapContainerRef.current) return;
+     const map = L.map(mapContainerRef.current).setView([coords.lat, coords.lon], 4);
+     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+       maxZoom: 19,
+       attribution: "&copy; OpenStreetMap contributors",
+     }).addTo(map);
+
+     let marker: L.Marker | null = null;
+     let popup: L.Popup | null = null;
+
+     map.on("click", (e: L.LeafletMouseEvent) => {
+       const { lat, lng } = e.latlng;
+       if (marker) marker.remove();
+       if (popup) map.closePopup(popup);
+
+       const icon = L.divIcon({
+         className: "",
+         html:
+           '<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;background:#ef4444;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 0 6px rgba(0,0,0,0.6)"></div>',
+         iconSize: [18, 18],
+         iconAnchor: [9, 18],
+         popupAnchor: [0, -28],
+       });
+       marker = L.marker([lat, lng], { icon }).addTo(map);
+
+       const content = document.createElement("div");
+       content.style.cssText =
+         "display:flex;flex-direction:column;gap:6px;min-width:160px;color:#e5e7eb;";
+       const label = document.createElement("div");
+       label.style.cssText = "font-size:11px;color:#93c5fd;";
+       label.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+       const row = document.createElement("div");
+       row.style.cssText = "display:flex;gap:6px;justify-content:flex-end;";
+       const cancelBtn = document.createElement("button");
+       cancelBtn.textContent = "Cancel";
+       cancelBtn.style.cssText =
+         "padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.6);background:rgba(15,23,42,0.95);color:#e5e7eb;font-size:12px;cursor:pointer;";
+       const loadBtn = document.createElement("button");
+       loadBtn.textContent = "Load";
+       loadBtn.style.cssText =
+         "padding:4px 10px;border-radius:999px;border:1px solid rgba(129,140,248,0.9);background:linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98));color:#fff;font-size:12px;cursor:pointer;";
+       cancelBtn.addEventListener("click", () => {
+         if (marker) {
+           marker.remove();
+           marker = null;
+         }
+         if (popup) {
+           map.closePopup(popup);
+           popup = null;
+         }
+       });
+       loadBtn.addEventListener("click", () => {
+         setCoordsInput(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+         loadForCoords(lat, lng);
+         setShowMap(false);
+       });
+       row.appendChild(cancelBtn);
+       row.appendChild(loadBtn);
+       content.appendChild(label);
+       content.appendChild(row);
+
+       popup = L.popup({
+         className: "ww-popup",
+         closeButton: false,
+         offset: L.point(0, -30),
+       })
+         .setLatLng([lat, lng])
+         .setContent(content)
+         .openOn(map);
+     });
+
+     mapRef.current = map;
+     setTimeout(() => map.invalidateSize(), 0);
+     return () => {
+       map.remove();
+       mapRef.current = null;
+     };
+   }, [showMap]);
 
 
    const { labels, counts, avgSpeeds, monthly, monthlySeries, globalMaxFrac } = useMemo(() => {
@@ -481,7 +565,8 @@ function App() {
                   onChange={(e) => setCoordsInput(e.target.value)}
                   placeholder="Latitude, Longitude (e.g. 43.95998, 4.81797)"
                   style={{
-                    flex: 1,
+                    flex: "1 1 0",
+                    minWidth: 0,
                     padding: "0.45rem 0.7rem",
                     borderRadius: 999,
                     border: "1px solid rgba(148,163,184,0.6)",
@@ -491,6 +576,22 @@ function App() {
                     outline: "none",
                   }}
                 />
+                <button
+                  onClick={() => setShowMap(true)}
+                  style={{
+                    padding: "0.45rem 0.9rem",
+                    borderRadius: 999,
+                    border: "1px solid rgba(148,163,184,0.6)",
+                    background: "rgba(15,23,42,0.95)",
+                    color: "#e5e7eb",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Map
+                </button>
                 <button
                   onClick={() => {
                     const parts = coordsInput.split(/[,\s]+/).filter(Boolean);
@@ -1163,6 +1264,84 @@ function App() {
     </div>
     </div>
     </div>
+    {showMap && (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 1000,
+          background: "rgba(2,6,23,0.85)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 960,
+            height: "75vh",
+            background: "rgba(15,23,42,0.98)",
+            borderRadius: 16,
+            border: "1px solid rgba(148,163,184,0.5)",
+            padding: "1rem",
+            boxSizing: "border-box",
+          }}
+        >
+          <button
+            onClick={() => setShowMap(false)}
+            style={{
+              position: "absolute",
+              top: -12,
+              right: -12,
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              border: "1px solid rgba(148,163,184,0.6)",
+              background: "rgba(15,23,42,0.98)",
+              color: "#e5e7eb",
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: "pointer",
+              zIndex: 1001,
+            }}
+          >
+            ×
+          </button>
+          <style>{`
+            .ww-popup .leaflet-popup-content-wrapper {
+              background: rgba(15,23,42,0.98);
+              color: #e5e7eb;
+              border: 1px solid rgba(148,163,184,0.5);
+              border-radius: 10px;
+            }
+            .ww-popup .leaflet-popup-tip {
+              background: rgba(15,23,42,0.98);
+            }
+            .ww-popup .leaflet-popup-content {
+              margin: 8px 10px;
+            }
+            .leaflet-container,
+            .leaflet-container.leaflet-grab,
+            .leaflet-container.leaflet-dragging .leaflet-grab,
+            .leaflet-dragging .leaflet-container {
+              cursor: default !important;
+            }
+          `}</style>
+          <div
+            ref={mapContainerRef}
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 10,
+              overflow: "hidden",
+            }}
+          />
+        </div>
+      </div>
+    )}
     </div>
   );
 }
