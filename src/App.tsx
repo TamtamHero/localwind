@@ -12,6 +12,13 @@ type WindResponse = {
   };
 };
 
+type GeoResult = {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+};
+
 const baseDirs8 = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 const baseDirs16 = [
   "N",
@@ -131,8 +138,15 @@ function App() {
    const [relativeSpeed, setRelativeSpeed] = useState(false);
    const [isPortrait, setIsPortrait] = useState(false);
    const [showMap, setShowMap] = useState(false);
+   const [searchQuery, setSearchQuery] = useState("");
+   const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
+   const [searchLoading, setSearchLoading] = useState(false);
    const mapContainerRef = useRef<HTMLDivElement | null>(null);
    const mapRef = useRef<L.Map | null>(null);
+   const placePinRef = useRef<
+     ((lat: number, lng: number, zoom?: number) => void) | null
+   >(null);
+   const suppressSearchRef = useRef(false);
 
    useEffect(() => {
      if (!showMap || !mapContainerRef.current) return;
@@ -145,10 +159,11 @@ function App() {
      let marker: L.Marker | null = null;
      let popup: L.Popup | null = null;
 
-     map.on("click", (e: L.LeafletMouseEvent) => {
-       const { lat, lng } = e.latlng;
+     const placePin = (lat: number, lng: number, zoom?: number) => {
        if (marker) marker.remove();
        if (popup) map.closePopup(popup);
+
+       if (zoom) map.setView([lat, lng], zoom, { animate: true });
 
        const icon = L.divIcon({
          className: "",
@@ -204,6 +219,12 @@ function App() {
          .setLatLng([lat, lng])
          .setContent(content)
          .openOn(map);
+     };
+
+     placePinRef.current = placePin;
+
+     map.on("click", (e: L.LeafletMouseEvent) => {
+       placePin(e.latlng.lat, e.latlng.lng);
      });
 
      mapRef.current = map;
@@ -211,8 +232,68 @@ function App() {
      return () => {
        map.remove();
        mapRef.current = null;
+       placePinRef.current = null;
      };
    }, [showMap]);
+
+   const runSearch = async () => {
+     const q = searchQuery.trim();
+     if (!q) return;
+     setSearchLoading(true);
+     try {
+       const params = new URLSearchParams({
+         format: "jsonv2",
+         limit: "10",
+         addressdetails: "1",
+         q,
+       });
+       const map = mapRef.current;
+       if (map) {
+         const b = map.getBounds();
+         const sw = b.getSouthWest();
+         const ne = b.getNorthEast();
+         params.set("viewbox", `${sw.lng},${ne.lat},${ne.lng},${sw.lat}`);
+         params.set("bounded", "0");
+       }
+       const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+       const res = await fetch(url, {
+         headers: { Accept: "application/json" },
+       });
+       const json = (await res.json()) as GeoResult[];
+       setSearchResults(Array.isArray(json) ? json : []);
+     } catch {
+       setSearchResults([]);
+     } finally {
+       setSearchLoading(false);
+     }
+   };
+
+   const selectSearchResult = (r: GeoResult) => {
+     const lat = Number(r.lat);
+     const lon = Number(r.lon);
+     if (!isFinite(lat) || !isFinite(lon)) return;
+     suppressSearchRef.current = true;
+     setSearchQuery(r.display_name);
+     setSearchResults([]);
+     if (placePinRef.current) placePinRef.current(lat, lon, 12);
+   };
+
+   useEffect(() => {
+     if (!showMap) return;
+     if (suppressSearchRef.current) {
+       suppressSearchRef.current = false;
+       return;
+     }
+     const q = searchQuery.trim();
+     if (q.length < 3) {
+       setSearchResults([]);
+       return;
+     }
+     const timer = setTimeout(() => {
+       runSearch();
+     }, 400);
+     return () => clearTimeout(timer);
+   }, [searchQuery, showMap]);
 
 
    const { labels, counts, avgSpeeds, monthly, monthlySeries, globalMaxFrac } = useMemo(() => {
@@ -577,7 +658,11 @@ function App() {
                   }}
                 />
                 <button
-                  onClick={() => setShowMap(true)}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setShowMap(true);
+                  }}
                   style={{
                     padding: "0.45rem 0.9rem",
                     borderRadius: 999,
@@ -710,77 +795,6 @@ function App() {
               Speed Scale: {relativeSpeed ? "Relative" : "Absolute"}
             </button>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                width: 165,
-                fontSize: 12,
-                color: "#9ca3af",
-              }}
-            >
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  height: 10,
-                  borderRadius: 999,
-                  background: `linear-gradient(to right, ${speedGradient})`,
-                  boxShadow: "0 0 0 1px rgba(15,23,42,0.7)",
-                }}
-              >
-                {scaleSpeed != null && (
-                  <>
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: `${(Math.max(0, Math.min(maxSpeedForColor, scaleSpeed)) / maxSpeedForColor) * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                        width: 14,
-                        height: 14,
-                        borderRadius: 999,
-                        background: colorForSpeed(scaleSpeed),
-                        border: "2px solid #0f172a",
-                        boxShadow: "0 0 8px rgba(0,0,0,0.6)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "calc(100% + 4px)",
-                        left: `${(Math.max(0, Math.min(maxSpeedForColor, scaleSpeed)) / maxSpeedForColor) * 100}%`,
-                        transform: "translateX(-50%)",
-                        padding: "1px 5px",
-                        borderRadius: 6,
-                        background: "rgba(15,23,42,0.98)",
-                        border: `1px solid ${colorForSpeed(scaleSpeed)}`,
-                        color: "#e5e7eb",
-                        fontSize: 10,
-                        whiteSpace: "nowrap",
-                        zIndex: 30,
-                      }}
-                    >
-                      {scaleSpeed.toFixed(1)} km/h
-                    </div>
-                  </>
-                )}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span style={{ opacity: 0.9 }}>0 km/h</span>
-                <span style={{ opacity: 0.9 }}>
-                  {relativeSpeed
-                    ? `${maxSpeedForColor.toFixed(0)} km/h`
-                    : "30+ km/h"}
-                </span>
-              </div>
-            </div>
           </div>
 
           {error && (
@@ -1288,6 +1302,9 @@ function App() {
             border: "1px solid rgba(148,163,184,0.5)",
             padding: "1rem",
             boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
           }}
         >
           <button
@@ -1330,11 +1347,78 @@ function App() {
               cursor: default !important;
             }
           `}</style>
+          <div style={{ position: "relative", zIndex: 1002 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") runSearch();
+                }}
+                placeholder="Search a place (e.g. Paris, Montpellier)"
+                style={{
+                  flex: "1 1 0",
+                  minWidth: 0,
+                  padding: "0.5rem 0.9rem",
+                  borderRadius: 999,
+                  border: "1px solid rgba(148,163,184,0.6)",
+                  background: "rgba(15,23,42,0.95)",
+                  color: "#e5e7eb",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+              />
+              {searchLoading && (
+                <span style={{ alignSelf: "center", fontSize: 12, color: "#9ca3af" }}>
+                  Searching…
+                </span>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  left: 0,
+                  right: 0,
+                  zIndex: 1003,
+                  background: "rgba(15,23,42,0.99)",
+                  border: "1px solid rgba(148,163,184,0.5)",
+                  borderRadius: 10,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  boxShadow: "0 12px 30px rgba(15,23,42,0.9)",
+                }}
+              >
+                {searchResults.map((r) => (
+                  <button
+                    key={r.place_id}
+                    onClick={() => selectSearchResult(r)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "7px 10px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: "1px solid rgba(148,163,184,0.2)",
+                      color: "#e5e7eb",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {r.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div
             ref={mapContainerRef}
             style={{
+              flex: 1,
+              minHeight: 0,
               width: "100%",
-              height: "100%",
               borderRadius: 10,
               overflow: "hidden",
             }}
