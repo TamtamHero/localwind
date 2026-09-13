@@ -39,6 +39,25 @@ const baseDirs16 = [
   "NNW",
 ] as const;
 
+const dirFullNames: Record<string, string> = {
+  N: "North",
+  NNE: "North-northeast",
+  NE: "Northeast",
+  ENE: "East-northeast",
+  E: "East",
+  ESE: "East-southeast",
+  SE: "Southeast",
+  SSE: "South-southeast",
+  S: "South",
+  SSW: "South-southwest",
+  SW: "Southwest",
+  WSW: "West-southwest",
+  W: "West",
+  WNW: "West-northwest",
+  NW: "Northwest",
+  NNW: "North-northwest",
+};
+
 const RADIUS = 120;
 const INNER_RADIUS = 20;
 
@@ -460,7 +479,7 @@ function App() {
 
 
   const activeIndex =
-    selectedIndex != null ? selectedIndex : hoverIndex != null ? hoverIndex : null;
+    hoverIndex != null ? hoverIndex : selectedIndex != null ? selectedIndex : null;
 
   const dataset =
     selectedMonthForChart != null && monthlySeries[selectedMonthForChart]
@@ -484,6 +503,15 @@ function App() {
     activeIndex != null && activeIndex >= 0 && activeIndex < chartAvgSpeeds.length
       ? chartAvgSpeeds[activeIndex]
       : null;
+
+  const selectedSpeed =
+    selectedIndex != null &&
+    selectedIndex >= 0 &&
+    selectedIndex < chartAvgSpeeds.length
+      ? chartAvgSpeeds[selectedIndex]
+      : null;
+  const displayedScaleSpeed =
+    scaleSpeed != null ? scaleSpeed : selectedSpeed;
 
   const monthNames = [
     "January",
@@ -618,8 +646,11 @@ function App() {
                 color: "#9ca3af",
               }}
             >
-              Each sector shows how often the wind blows from that direction.
-              Color encodes the average speed from green (low speed) to red (higher speed).
+              A wind rose summarizing hourly wind measurements from the last
+              365 days. Each wedge points to the direction the wind blows from
+              and its length shows how often that direction occurs — longer
+              means more frequent. Color shows the average wind speed for that
+              direction, from green (calm) to red (strong).
             </p>
           </div>
 
@@ -1014,59 +1045,111 @@ function App() {
               marginTop: 2,
               background: "rgba(15,23,42,0.96)",
               borderRadius: 14,
-              padding: "0.55rem 0.9rem",
+              padding: "0.6rem 0.9rem 0.7rem",
               border: "1px solid rgba(148,163,184,0.7)",
               boxShadow: "0 10px 25px rgba(15,23,42,0.9)",
-              minWidth: 190,
+              minWidth: 260,
               fontSize: 12,
               zIndex: 20,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
+              flexDirection: "column",
+              gap: 6,
+              color: "#e5e7eb",
             }}
           >
+            <div
+              style={{
+                fontSize: 10,
+                color: "#93c5fd",
+                letterSpacing: 0.02,
+              }}
+            >
+              {chartTitle}
+            </div>
+            <div style={{ fontWeight: 600 }}>
+              {activeLabel
+                ? dirFullNames[activeLabel] ?? activeLabel
+                : "No sector selected"}
+            </div>
+            <div style={{ color: "#9ca3af" }}>
+              Frequency:{" "}
+              <strong>
+                {activeCount != null ? `${activeCount}h` : "–"}
+              </strong>
+              {activeCount != null && chartTotalCount > 0 && (
+                <span>
+                  {" "}(
+                  {((activeCount / chartTotalCount) * 100).toFixed(1)}%)
+                </span>
+              )}
+            </div>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: 2,
-                color: "#e5e7eb",
+                marginTop: 2,
               }}
             >
-              <div style={{ fontSize: 10, color: "#93c5fd", letterSpacing: 0.02 }}>
-                {chartTitle}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: 10,
+                  borderRadius: 999,
+                  background: `linear-gradient(to right, ${speedGradient})`,
+                  boxShadow: "0 0 0 1px rgba(15,23,42,0.7)",
+                }}
+              >
+                {displayedScaleSpeed != null && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: `${(Math.max(0, Math.min(maxSpeedForColor, displayedScaleSpeed)) / maxSpeedForColor) * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                      width: 14,
+                      height: 14,
+                      borderRadius: 999,
+                      background: colorForSpeed(displayedScaleSpeed),
+                      border: "2px solid #0f172a",
+                      boxShadow: "0 0 8px rgba(0,0,0,0.6)",
+                    }}
+                  />
+                )}
               </div>
-              <div style={{ fontWeight: 600 }}>
-                {activeLabel ?? "No sector selected"}
-              </div>
-              <div style={{ color: "#9ca3af" }}>
-                <div>
-                  Frequency: <strong>{activeCount ?? "–"}</strong>
-                  {activeCount != null && chartTotalCount > 0 && (
-                    <span>
-                      {" "}(
-                      {((activeCount / chartTotalCount) * 100).toFixed(1)}%
-                      )
-                    </span>
-                  )}
-                </div>
-                <div>
-                  Avg speed: <strong>{activeSpeed != null ? `${activeSpeed.toFixed(1)} km/h` : "–"}</strong>
-                </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 10,
+                  color: "#9ca3af",
+                }}
+              >
+                <span>0 km/h</span>
+                <span
+                  style={{
+                    color:
+                      displayedScaleSpeed != null
+                        ? colorForSpeed(displayedScaleSpeed)
+                        : "#9ca3af",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {displayedScaleSpeed != null
+                    ? `${displayedScaleSpeed.toFixed(1)} km/h`
+                    : ""}
+                </span>
+                <span>
+                  {relativeSpeed
+                    ? `${maxSpeedForColor.toFixed(0)} km/h`
+                    : "30+ km/h"}
+                </span>
               </div>
             </div>
-            <div
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 999,
-                background:
-                  activeSpeed != null ? colorForSpeed(activeSpeed) : "rgba(75,85,99,0.7)",
-                boxShadow: "0 0 12px rgba(148,163,184,0.9)",
-                flexShrink: 0,
-              }}
-            />
           </div>
       </div>
     </div>
