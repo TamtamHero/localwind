@@ -681,7 +681,7 @@ function App() {
           boxSizing: "border-box",
           overflow: isPortrait ? "visible" : "hidden",
           margin: 0,
-          padding: "1.25rem",
+          padding: isPortrait ? "0.4rem" : "1.25rem",
           background: "radial-gradient(circle at top, #0f172a, #020617)",
           color: "#e5e7eb",
           fontFamily:
@@ -703,7 +703,7 @@ function App() {
            border: "1px solid rgba(148,163,184,0.25)",
            boxShadow:
              "0 24px 80px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.8)",
-           padding: "1.25rem 1.5rem 1.5rem",
+           padding: isPortrait ? "0.6rem" : "1.25rem 1.5rem 1.5rem",
            backdropFilter: "blur(18px)",
             display: "grid",
             gridTemplateColumns: isPortrait
