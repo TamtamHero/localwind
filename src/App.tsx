@@ -92,13 +92,29 @@ function App() {
       const canUseLS =
         typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
+      const CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
       if (canUseLS) {
-        const cached = window.localStorage.getItem("windwatcher:v2:" + key);
+        const cacheKey = "windwatcher:v2:" + key;
+        const cached = window.localStorage.getItem(cacheKey);
         if (cached) {
-          const parsed = JSON.parse(cached) as WindResponse;
-          setData(parsed);
-          setLoading(false);
-          return;
+          try {
+            const parsed = JSON.parse(cached) as {
+              savedAt?: number;
+              data?: WindResponse;
+            };
+            if (
+              parsed &&
+              typeof parsed.savedAt === "number" &&
+              Date.now() - parsed.savedAt < CACHE_MAX_AGE &&
+              parsed.data
+            ) {
+              setData(parsed.data);
+              setLoading(false);
+              return;
+            }
+          } catch {
+          }
+          window.localStorage.removeItem(cacheKey);
         }
       }
       const now = new Date();
@@ -121,7 +137,10 @@ function App() {
 
       if (canUseLS) {
         try {
-          window.localStorage.setItem("windwatcher:v2:" + key, JSON.stringify(json));
+          window.localStorage.setItem(
+            "windwatcher:v2:" + key,
+            JSON.stringify({ savedAt: Date.now(), data: json })
+          );
         } catch {
         }
       }
