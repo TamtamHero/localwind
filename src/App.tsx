@@ -883,9 +883,12 @@ function App() {
               style={{
                 marginTop: 0,
                 marginBottom: 4,
-                fontSize: 26,
+                fontSize: "clamp(15px, 4.6vw, 26px)",
                 fontWeight: 600,
                 letterSpacing: 0.02,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {t.title}
