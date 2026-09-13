@@ -9,6 +9,7 @@ type WindResponse = {
     time?: string[];
     wind_direction_10m?: number[];
     wind_speed_10m?: number[];
+    wind_gusts_10m?: number[];
   };
 };
 
@@ -92,7 +93,7 @@ function App() {
         typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
       if (canUseLS) {
-        const cached = window.localStorage.getItem("windwatcher:" + key);
+        const cached = window.localStorage.getItem("windwatcher:v2:" + key);
         if (cached) {
           const parsed = JSON.parse(cached) as WindResponse;
           setData(parsed);
@@ -110,7 +111,7 @@ function App() {
       url.searchParams.set("longitude", String(lon));
       url.searchParams.set("start_date", start);
       url.searchParams.set("end_date", end);
-      url.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m");
+      url.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m,wind_gusts_10m");
       url.searchParams.set("timezone", "UTC");
 
       const res = await fetch(url.toString());
@@ -120,7 +121,7 @@ function App() {
 
       if (canUseLS) {
         try {
-          window.localStorage.setItem("windwatcher:" + key, JSON.stringify(json));
+          window.localStorage.setItem("windwatcher:v2:" + key, JSON.stringify(json));
         } catch {
         }
       }
@@ -155,6 +156,8 @@ function App() {
    const [monthlyHover, setMonthlyHover] = useState<number | null>(null);
    const [scaleSpeed, setScaleSpeed] = useState<number | null>(null);
    const [relativeSpeed, setRelativeSpeed] = useState(false);
+   const [metric, setMetric] = useState<"average" | "median" | "max">("average");
+   const [useGusts, setUseGusts] = useState(false);
    const [isPortrait, setIsPortrait] = useState(false);
    const [showMap, setShowMap] = useState(false);
    const [searchQuery, setSearchQuery] = useState("");
@@ -317,11 +320,13 @@ function App() {
 
    const { labels, counts, avgSpeeds, monthly, monthlySeries, globalMaxFrac } = useMemo(() => {
      const dirs = data?.hourly?.wind_direction_10m ?? [];
-     const speeds = data?.hourly?.wind_speed_10m ?? [];
+     const speeds = useGusts
+       ? data?.hourly?.wind_gusts_10m ?? data?.hourly?.wind_speed_10m ?? []
+       : data?.hourly?.wind_speed_10m ?? [];
      const times = data?.hourly?.time ?? [];
      const labelsArr = highPrecision ? baseDirs16 : baseDirs8;
      const countsMap: Record<string, number> = {};
-     const speedSumMap: Record<string, number> = {};
+     const speedsMap: Record<string, number[]> = {};
      const monthly: Array<{ year: number; month: number; count: number; avgSpeed: number }> = [];
      const monthlySeries: Array<{
        labels: (typeof labelsArr)[number][];
@@ -329,15 +334,30 @@ function App() {
        avgSpeeds: number[];
        maxCount: number;
      }> = [];
+
+     const statFor = (arr: number[]) => {
+       if (!arr.length) return 0;
+       if (metric === "max") return Math.max(...arr);
+       if (metric === "median") {
+         const sorted = [...arr].sort((a, b) => a - b);
+         const mid = Math.floor(sorted.length / 2);
+         return sorted.length % 2
+           ? sorted[mid]
+           : (sorted[mid - 1] + sorted[mid]) / 2;
+       }
+       let sum = 0;
+       for (const v of arr) sum += v;
+       return sum / arr.length;
+     };
  
      if (times.length && speeds.length && dirs.length) {
        const buckets: Record<
          string,
          {
            count: number;
-           speedSum: number;
+           speedsAll: number[];
            dirCounts: Record<string, number>;
-           dirSpeedSums: Record<string, number>;
+           dirSpeeds: Record<string, number[]>;
          }
        > = {};
  
@@ -348,18 +368,17 @@ function App() {
          if (!buckets[key]) {
            buckets[key] = {
              count: 0,
-             speedSum: 0,
+             speedsAll: [],
              dirCounts: {},
-             dirSpeedSums: {},
+             dirSpeeds: {},
            };
          }
          const speed = speeds[idx] ?? 0;
          const dirLabel = degreeToCompass(dirs[idx] ?? 0, highPrecision);
          buckets[key].count += 1;
-         buckets[key].speedSum += speed;
+         buckets[key].speedsAll.push(speed);
          buckets[key].dirCounts[dirLabel] = (buckets[key].dirCounts[dirLabel] ?? 0) + 1;
-         buckets[key].dirSpeedSums[dirLabel] =
-           (buckets[key].dirSpeedSums[dirLabel] ?? 0) + speed;
+         (buckets[key].dirSpeeds[dirLabel] ??= []).push(speed);
        });
  
        const keys = Object.keys(buckets).sort();
@@ -371,15 +390,13 @@ function App() {
            year: Number(y),
            month: Number(m),
            count: bucket.count,
-           avgSpeed: bucket.count ? bucket.speedSum / bucket.count : 0,
+           avgSpeed: statFor(bucket.speedsAll),
          });
  
          const mCounts = labelsArr.map((label) => bucket.dirCounts[label] ?? 0);
-         const mAvgSpeeds = labelsArr.map((label, i) => {
-           const c = mCounts[i];
-           if (!c) return 0;
-           return (bucket.dirSpeedSums[label] ?? 0) / c;
-         });
+         const mAvgSpeeds = labelsArr.map((label) =>
+           statFor(bucket.dirSpeeds[label] ?? [])
+         );
          const mMaxCount = Math.max(1, ...mCounts);
          monthlySeries.push({
            labels: labelsArr.slice(),
@@ -396,22 +413,18 @@ function App() {
 
     labelsArr.forEach((d) => {
       countsMap[d] = 0;
-      speedSumMap[d] = 0;
+      speedsMap[d] = [];
     });
 
     dirs.forEach((deg, idx) => {
       const k = degreeToCompass(deg, highPrecision);
       const speed = speeds[idx] ?? 0;
       countsMap[k] = (countsMap[k] ?? 0) + 1;
-      speedSumMap[k] = (speedSumMap[k] ?? 0) + speed;
+      (speedsMap[k] ??= []).push(speed);
     });
 
     const countsArr = labelsArr.map((d) => countsMap[d] ?? 0);
-    const avgSpeedsArr = labelsArr.map((d) => {
-      const c = countsMap[d] ?? 0;
-      if (!c) return 0;
-      return (speedSumMap[d] ?? 0) / c;
-    });
+    const avgSpeedsArr = labelsArr.map((d) => statFor(speedsMap[d] ?? []));
 
     const totalHours = times.length || 1;
     let globalMaxFrac = 0;
@@ -434,7 +447,8 @@ function App() {
       monthlySeries,
       globalMaxFrac,
     };
-   }, [data, highPrecision]);
+    }, [data, highPrecision, metric, useGusts]);
+
 
 
    if (loading)
@@ -568,7 +582,11 @@ function App() {
     (max, series) => Math.max(max, ...series.avgSpeeds),
     1
   );
-  const maxSpeedForColor = relativeSpeed ? monthlyMaxSpeed : 30;
+  const absoluteMaxSpeed =
+    metric === "max" ? (useGusts ? 100 : 50) : useGusts ? 50 : 30;
+  const maxSpeedForColor = relativeSpeed
+    ? monthlyMaxSpeed
+    : absoluteMaxSpeed;
 
   const colorForSpeed = (speed: number) => {
     const clamped = Math.max(0, Math.min(maxSpeedForColor, speed));
@@ -746,7 +764,7 @@ function App() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   flexWrap: "wrap",
-                  gap: 12,
+                  gap: 8,
                 }}
               >
 
@@ -754,50 +772,29 @@ function App() {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 8,
                   height: 40,
                   boxSizing: "border-box",
-                  padding: "0.4rem 0.65rem",
+                  padding: "0.4rem 0.7rem",
                   borderRadius: 999,
-                  background: "rgba(15,23,42,0.8)",
-                  border: "1px solid rgba(148,163,184,0.5)",
-                  fontSize: 13,
+                  background: highPrecision
+                    ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
+                    : "rgba(15,23,42,0.8)",
+                  border: highPrecision
+                    ? "1px solid rgba(129,140,248,0.9)"
+                    : "1px solid rgba(148,163,184,0.5)",
+                  fontSize: 12,
                   cursor: "pointer",
                 }}
               >
-              <span
-                style={{
-                  width: 34,
-                  height: 18,
-                  borderRadius: 999,
-                  padding: 2,
-                  background: highPrecision
-                    ? "linear-gradient(to right, #38bdf8, #6366f1)"
-                    : "rgba(15,23,42,0.9)",
-                  border: "1px solid rgba(148,163,184,0.5)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: highPrecision ? "flex-end" : "flex-start",
-                  transition: "background 150ms ease, justify-content 150ms ease",
-                }}
-              >
-                <span
-                  style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 999,
-                    background: "#e5e7eb",
-                    boxShadow: "0 0 0 1px rgba(15,23,42,0.6)",
-                  }}
-                />
-              </span>
               <input
                 type="checkbox"
                 checked={highPrecision}
                 onChange={(e) => setHighPrecision(e.target.checked)}
                 style={{ display: "none" }}
               />
-              <span style={{ color: "#e5e7eb" }}>16-point precision</span>
+              <span style={{ color: highPrecision ? "white" : "#e5e7eb" }}>
+                {highPrecision ? "16" : "8"}-point precision
+              </span>
             </label>
 
             <button
@@ -808,8 +805,7 @@ function App() {
                 justifyContent: "center",
                 height: 40,
                 boxSizing: "border-box",
-                width: 190,
-                padding: "0.4rem 0.65rem",
+                padding: "0.4rem 0.7rem",
                 borderRadius: 999,
                 background: relativeSpeed
                   ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
@@ -818,12 +814,81 @@ function App() {
                   ? "1px solid rgba(129,140,248,0.9)"
                   : "1px solid rgba(148,163,184,0.5)",
                 color: relativeSpeed ? "white" : "#e5e7eb",
-                fontSize: 13,
+                fontSize: 12,
                 cursor: "pointer",
                 whiteSpace: "nowrap",
               }}
             >
               Speed Scale: {relativeSpeed ? "Relative" : "Absolute"}
+            </button>
+
+            <button
+              onClick={() =>
+                setMetric((prev) =>
+                  prev === "average"
+                    ? "median"
+                    : prev === "median"
+                    ? "max"
+                    : "average"
+                )
+              }
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                boxSizing: "border-box",
+                padding: "0.4rem 0.7rem",
+                borderRadius: 999,
+                background:
+                  metric === "median"
+                    ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
+                    : metric === "max"
+                    ? "linear-gradient(to right, rgba(239,68,68,0.95), rgba(244,63,94,0.98))"
+                    : "rgba(15,23,42,0.8)",
+                border:
+                  metric === "median"
+                    ? "1px solid rgba(129,140,248,0.9)"
+                    : metric === "max"
+                    ? "1px solid rgba(248,113,113,0.9)"
+                    : "1px solid rgba(148,163,184,0.5)",
+                color: metric === "average" ? "#e5e7eb" : "white",
+                fontSize: 12,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Values:{" "}
+              {metric === "average"
+                ? "Average"
+                : metric === "median"
+                ? "Median"
+                : "Max"}
+            </button>
+
+            <button
+              onClick={() => setUseGusts((prev) => !prev)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                boxSizing: "border-box",
+                padding: "0.4rem 0.7rem",
+                borderRadius: 999,
+                background: useGusts
+                  ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
+                  : "rgba(15,23,42,0.8)",
+                border: useGusts
+                  ? "1px solid rgba(129,140,248,0.9)"
+                  : "1px solid rgba(148,163,184,0.5)",
+                color: useGusts ? "white" : "#e5e7eb",
+                fontSize: 12,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Data: {useGusts ? "Gusts" : "Wind"}
             </button>
 
           </div>
@@ -1146,7 +1211,7 @@ function App() {
                 <span>
                   {relativeSpeed
                     ? `${maxSpeedForColor.toFixed(0)} km/h`
-                    : "30+ km/h"}
+                    : `${absoluteMaxSpeed}+ km/h`}
                 </span>
               </div>
             </div>
