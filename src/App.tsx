@@ -345,6 +345,7 @@ function App() {
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
    const miniHalf = RADIUS + 20;
+   const mainHalf = RADIUS + 24;
 
 
   const hueStops: Array<[number, number]> = [
@@ -392,22 +393,28 @@ function App() {
   return (
       <div
         style={{
-          minHeight: "100vh",
+          height: "100vh",
+          boxSizing: "border-box",
+          overflow: "hidden",
           margin: 0,
           padding: "1.25rem",
           background: "radial-gradient(circle at top, #0f172a, #020617)",
           color: "#e5e7eb",
           fontFamily:
            "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-       <div
-         style={{
-           width: "100%",
-           maxWidth: 1200,
-           background: "rgba(15,23,42,0.9)",
+           display: "flex",
+           justifyContent: "center",
+           alignItems: "stretch",
+         }}
+       >
+         <div
+           style={{
+             width: "100%",
+             minHeight: 0,
+             overflow: "hidden",
+             background: "rgba(15,23,42,0.9)",
+
+
            borderRadius: 24,
            border: "1px solid rgba(148,163,184,0.25)",
            boxShadow:
@@ -418,12 +425,13 @@ function App() {
             gridTemplateColumns: isPortrait
               ? "minmax(0, 1fr)"
               : "minmax(0, 2fr) minmax(0, 3fr)",
+            gridTemplateRows: isPortrait ? undefined : "minmax(0, 1fr)",
             gap: "1.5rem",
             alignItems: "stretch",
 
          }}
        >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", minHeight: 0 }}>
           <div>
             <div
               style={{
@@ -720,27 +728,30 @@ function App() {
 
          <div
            style={{
+             flex: 1,
+             minHeight: 0,
              display: "flex",
+             flexDirection: "column",
              alignItems: "center",
-             justifyContent: "center",
+             justifyContent: "flex-end",
              width: "100%",
              marginBottom: isPortrait ? 80 : 0,
            }}
          >
            <div
              style={{
-               position: "relative",
+               flex: 1,
+               minHeight: 0,
                width: "100%",
-               maxWidth: 640,
                display: "flex",
                alignItems: "center",
                justifyContent: "center",
              }}
            >
               <svg
-                width="80%"
-                height="80%"
-                viewBox={`0 0 ${totalRadius * 2} ${totalRadius * 2}`}
+                width="100%"
+                height="100%"
+                viewBox={`${center - mainHalf} ${center - mainHalf} ${mainHalf * 2} ${mainHalf * 2}`}
                 preserveAspectRatio="xMidYMid meet"
               >
             <defs>
@@ -908,13 +919,11 @@ function App() {
               strokeWidth={1}
             />
           </svg>
+           </div>
 
           <div
             style={{
-              position: "absolute",
-               left: "50%",
-               bottom: -52,
-               transform: "translateX(-50%)",
+              marginTop: 2,
               background: "rgba(15,23,42,0.96)",
               borderRadius: 14,
               padding: "0.55rem 0.9rem",
@@ -971,24 +980,26 @@ function App() {
               }}
             />
           </div>
-        </div>
       </div>
     </div>
     <div
       style={{
-        position: "relative",
-        borderRadius: 16,
-        border: "1px dashed rgba(148,163,184,0.5)",
-        background: "rgba(15,23,42,0.6)",
-        padding: "0.75rem",
+        width: "100%",
+        minHeight: 0,
+        height: isPortrait ? "auto" : "100%",
       }}
     >
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns: isPortrait
+            ? "repeat(3, minmax(0, 1fr))"
+            : "repeat(4, minmax(0, 1fr))",
+          gridTemplateRows: isPortrait ? undefined : "repeat(3, minmax(0, 1fr))",
           gap: "0.5rem",
-          alignItems: "start",
+          height: isPortrait ? "auto" : "100%",
+          alignContent: isPortrait ? "start" : "stretch",
+          alignItems: isPortrait ? "start" : "stretch",
         }}
       >
       {monthly.map((m, idx) => {
@@ -1022,6 +1033,8 @@ function App() {
             display: "flex",
             flexDirection: "column",
             gap: 2,
+            minHeight: 0,
+            overflow: "hidden",
             cursor: "pointer",
             transition: "background 150ms ease, box-shadow 150ms ease",
             zIndex: isSelected ? 2 : 1,
@@ -1048,6 +1061,8 @@ function App() {
           </div>
           <div
             style={{
+              flex: 1,
+              minHeight: 0,
               width: "100%",
               display: "flex",
               justifyContent: "center",
@@ -1056,8 +1071,9 @@ function App() {
             <div
               style={{
                 position: "relative",
+                flex: 1,
+                minHeight: 0,
                 width: "100%",
-                paddingBottom: "100%",
               }}
             >
               <svg
