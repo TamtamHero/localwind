@@ -434,37 +434,9 @@ function App() {
        >
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem", minHeight: 0 }}>
           <div>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "0.2rem 0.7rem",
-                borderRadius: 999,
-                background:
-                  "linear-gradient(to right, rgba(59,130,246,0.22), rgba(236,72,153,0.22))",
-                border: "1px solid rgba(148,163,184,0.3)",
-                fontSize: 12,
-                letterSpacing: 0.08,
-                textTransform: "uppercase",
-                color: "#cbd5f5",
-              }}
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 999,
-                  background:
-                    "radial-gradient(circle at 30% 30%, #e5e7eb, #22c55e 45%, transparent 60%)",
-                  boxShadow: "0 0 12px rgba(34,197,94,0.9)",
-                }}
-              />
-              Windwatcher · Local archive
-            </div>
             <h1
               style={{
-                marginTop: 14,
+                marginTop: 0,
                 marginBottom: 4,
                 fontSize: 26,
                 fontWeight: 600,
