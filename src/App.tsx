@@ -393,9 +393,10 @@ function App() {
   return (
       <div
         style={{
-          height: "100vh",
+          height: isPortrait ? "auto" : "100vh",
+          minHeight: isPortrait ? "100vh" : undefined,
           boxSizing: "border-box",
-          overflow: "hidden",
+          overflow: isPortrait ? "visible" : "hidden",
           margin: 0,
           padding: "1.25rem",
           background: "radial-gradient(circle at top, #0f172a, #020617)",
@@ -404,14 +405,14 @@ function App() {
            "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
            display: "flex",
            justifyContent: "center",
-           alignItems: "stretch",
+           alignItems: isPortrait ? "flex-start" : "stretch",
          }}
        >
          <div
            style={{
              width: "100%",
-             minHeight: 0,
-             overflow: "hidden",
+             minHeight: isPortrait ? undefined : 0,
+             overflow: isPortrait ? "visible" : "hidden",
              background: "rgba(15,23,42,0.9)",
 
 
@@ -735,13 +736,13 @@ function App() {
              alignItems: "center",
              justifyContent: "flex-end",
              width: "100%",
-             marginBottom: isPortrait ? 80 : 0,
+             marginBottom: isPortrait ? 4 : 0,
            }}
          >
            <div
              style={{
-               flex: 1,
-               minHeight: 0,
+               flex: isPortrait ? undefined : 1,
+               minHeight: isPortrait ? undefined : 0,
                width: "100%",
                display: "flex",
                alignItems: "center",
@@ -749,8 +750,8 @@ function App() {
              }}
            >
               <svg
-                width="100%"
-                height="100%"
+                width={isPortrait ? "80%" : "100%"}
+                height={isPortrait ? "80%" : "100%"}
                 viewBox={`${center - mainHalf} ${center - mainHalf} ${mainHalf * 2} ${mainHalf * 2}`}
                 preserveAspectRatio="xMidYMid meet"
               >
@@ -998,8 +999,8 @@ function App() {
           gridTemplateRows: isPortrait ? undefined : "repeat(3, minmax(0, 1fr))",
           gap: "0.5rem",
           height: isPortrait ? "auto" : "100%",
-          alignContent: isPortrait ? "start" : "stretch",
-          alignItems: isPortrait ? "start" : "stretch",
+          alignContent: "stretch",
+          alignItems: "stretch",
         }}
       >
       {monthly.map((m, idx) => {
@@ -1033,8 +1034,8 @@ function App() {
             display: "flex",
             flexDirection: "column",
             gap: 2,
-            minHeight: 0,
-            overflow: "hidden",
+            minHeight: isPortrait ? undefined : 0,
+            overflow: isPortrait ? "visible" : "hidden",
             cursor: "pointer",
             transition: "background 150ms ease, box-shadow 150ms ease",
             zIndex: isSelected ? 2 : 1,
@@ -1055,14 +1056,16 @@ function App() {
             }}
           >
             <span>
-              {monthNames[m.month - 1]} {m.year}
+              {isPortrait
+                ? monthNames[m.month - 1]
+                : `${monthNames[m.month - 1]} ${m.year}`}
             </span>
             <span style={{ color: "#9ca3af" }}>{m.count}h</span>
           </div>
           <div
             style={{
-              flex: 1,
-              minHeight: 0,
+              flex: isPortrait ? undefined : 1,
+              minHeight: isPortrait ? undefined : 0,
               width: "100%",
               display: "flex",
               justifyContent: "center",
@@ -1071,9 +1074,10 @@ function App() {
             <div
               style={{
                 position: "relative",
-                flex: 1,
-                minHeight: 0,
+                flex: isPortrait ? undefined : 1,
+                minHeight: isPortrait ? undefined : 0,
                 width: "100%",
+                paddingBottom: isPortrait ? "100%" : undefined,
               }}
             >
               <svg
