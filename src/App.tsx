@@ -273,7 +273,12 @@ function App() {
      let marker: L.Marker | null = null;
      let popup: L.Popup | null = null;
 
-     const placePin = (lat: number, lng: number, zoom?: number) => {
+     const placePin = (
+       lat: number,
+       lng: number,
+       zoom?: number,
+       withPopup = true
+     ) => {
        if (marker) marker.remove();
        if (popup) map.closePopup(popup);
 
@@ -288,6 +293,8 @@ function App() {
          popupAnchor: [0, -28],
        });
        marker = L.marker([lat, lng], { icon }).addTo(map);
+
+       if (!withPopup) return;
 
        const content = document.createElement("div");
        content.style.cssText =
@@ -336,6 +343,10 @@ function App() {
      };
 
      placePinRef.current = placePin;
+
+     if (isFinite(coords.lat) && isFinite(coords.lon)) {
+       placePin(coords.lat, coords.lon, undefined, false);
+     }
 
      map.on("click", (e: L.LeafletMouseEvent) => {
        placePin(e.latlng.lat, e.latlng.lng);
@@ -735,7 +746,7 @@ function App() {
 
          }}
        >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", minHeight: 0 }}>
           <div>
             <h1
               style={{
@@ -749,11 +760,17 @@ function App() {
               Wind rose for last 365 days
             </h1>
             <p
+              onClick={
+                isPortrait
+                  ? () => setShowFullDescription((v) => !v)
+                  : undefined
+              }
               style={{
                 margin: 0,
                 fontSize: 14,
                 lineHeight: 1.5,
                 color: "#9ca3af",
+                cursor: isPortrait ? "pointer" : "default",
                 ...(isPortrait && !showFullDescription
                   ? {
                       display: "-webkit-box",
@@ -793,7 +810,7 @@ function App() {
                 display: "flex",
                 flexDirection: "column",
                 gap: 10,
-                marginTop: 14,
+                marginTop: 4,
               }}
             >
               <div style={{ fontSize: 12, color: "#9ca3af" }}>
@@ -1046,22 +1063,23 @@ function App() {
              marginBottom: isPortrait ? 4 : 0,
            }}
          >
-           <div
-             style={{
-               flex: isPortrait ? undefined : 1,
-               minHeight: isPortrait ? undefined : 0,
-               width: "100%",
-               display: "flex",
-               alignItems: "center",
-               justifyContent: "center",
-             }}
-           >
-              <svg
-                width={isPortrait ? "80%" : "100%"}
-                height={isPortrait ? "80%" : "100%"}
-                viewBox={`${center - mainHalf} ${center - mainHalf} ${mainHalf * 2} ${mainHalf * 2}`}
-                preserveAspectRatio="xMidYMid meet"
-              >
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+               <svg
+                 width="100%"
+                 height="100%"
+                 viewBox={`${center - mainHalf} ${center - mainHalf} ${mainHalf * 2} ${mainHalf * 2}`}
+                 preserveAspectRatio="xMidYMid meet"
+               >
+
             <defs>
               <radialGradient id="centerGlow" cx="50%" cy="40%" r="60%">
                 <stop offset="0%" stopColor="#e5e7eb" stopOpacity={0.6} />
