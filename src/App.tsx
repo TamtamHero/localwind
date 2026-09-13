@@ -131,7 +131,7 @@ function App() {
    const [isPortrait, setIsPortrait] = useState(false);
 
 
-   const { labels, counts, avgSpeeds, monthly, monthlySeries } = useMemo(() => {
+   const { labels, counts, avgSpeeds, monthly, monthlySeries, globalMaxFrac } = useMemo(() => {
      const dirs = data?.hourly?.wind_direction_10m ?? [];
      const speeds = data?.hourly?.wind_speed_10m ?? [];
      const times = data?.hourly?.time ?? [];
@@ -228,8 +228,28 @@ function App() {
       if (!c) return 0;
       return (speedSumMap[d] ?? 0) / c;
     });
+
+    const totalHours = times.length || 1;
+    let globalMaxFrac = 0;
+    countsArr.forEach((c) => {
+      globalMaxFrac = Math.max(globalMaxFrac, c / totalHours);
+    });
+    monthlySeries.forEach((s, idx) => {
+      const total = monthly[idx]?.count || 1;
+      s.counts.forEach((c) => {
+        globalMaxFrac = Math.max(globalMaxFrac, c / total);
+      });
+    });
+    if (globalMaxFrac <= 0) globalMaxFrac = 1;
  
-    return { labels: labelsArr, counts: countsArr, avgSpeeds: avgSpeedsArr, monthly, monthlySeries };
+    return {
+      labels: labelsArr,
+      counts: countsArr,
+      avgSpeeds: avgSpeedsArr,
+      monthly,
+      monthlySeries,
+      globalMaxFrac,
+    };
    }, [data, highPrecision]);
 
 
@@ -796,7 +816,8 @@ function App() {
 
             {chartLabels.map((label, i) => {
               const value = chartCounts[i];
-              const frac = value / maxCount;
+              const frac =
+                value / Math.max(1, chartTotalCount) / globalMaxFrac;
               const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
               const avgSpeed = chartAvgSpeeds[i] ?? 0;
               const fillColor = colorForSpeed(avgSpeed);
@@ -1083,7 +1104,7 @@ function App() {
               })}
               {series.labels.map((label, i) => {
                 const value = series.counts[i];
-                const frac = value / series.maxCount;
+                const frac = value / Math.max(1, m.count) / globalMaxFrac;
                 const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
                 const avgSpeed = series.avgSpeeds[i] ?? 0;
                 const fillColor = colorForSpeed(avgSpeed);
