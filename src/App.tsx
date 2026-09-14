@@ -72,6 +72,7 @@ const STRINGS = {
     last365: "Last 365 days",
     noSector: "No sector selected",
     frequency: "Frequency",
+    maxAt: "Max on",
     searchPlaceholder: "Search a place (e.g. Paris, Montpellier)",
     searching: "Searching…",
     cancel: "Cancel",
@@ -143,6 +144,7 @@ const STRINGS = {
     last365: "365 derniers jours",
     noSector: "Aucun secteur sélectionné",
     frequency: "Fréquence",
+    maxAt: "Maximum le",
     searchPlaceholder: "Rechercher un lieu (ex. Paris, Montpellier)",
     searching: "Recherche…",
     cancel: "Annuler",
@@ -185,6 +187,18 @@ const STRINGS = {
       NNW: "Nord-nord-ouest",
     } as Record<string, string>,
   },
+};
+
+const formatDateTime = (iso: string, lang: Lang) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(lang === "fr" ? "fr-FR" : "en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const RADIUS = 120;
@@ -387,6 +401,10 @@ function App() {
    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
    const [selectedMonthForChart, setSelectedMonthForChart] = useState<number | null>(null);
    const [monthlyHover, setMonthlyHover] = useState<number | null>(null);
+   const [tileHover, setTileHover] = useState<{
+     series: number;
+     dir: number;
+   } | null>(null);
    const [scaleSpeed, setScaleSpeed] = useState<number | null>(null);
    const [relativeSpeed, setRelativeSpeed] = useState(false);
    const [metric, setMetric] = useState<"average" | "median" | "max">("average");
@@ -565,7 +583,15 @@ function App() {
    }, [searchQuery, showMap]);
 
 
-   const { labels, counts, avgSpeeds, monthly, monthlySeries, globalMaxFrac } = useMemo(() => {
+   const {
+    labels,
+    counts,
+    avgSpeeds,
+    maxTimes,
+    monthly,
+    monthlySeries,
+    globalMaxFrac,
+  } = useMemo(() => {
      const dirs = data?.hourly?.wind_direction_10m ?? [];
      const speeds = useGusts
        ? data?.hourly?.wind_gusts_10m ?? data?.hourly?.wind_speed_10m ?? []
@@ -580,6 +606,7 @@ function App() {
        counts: number[];
        avgSpeeds: number[];
        maxCount: number;
+       maxTimes: (string | null)[];
      }> = [];
 
      const statFor = (arr: number[]) => {
@@ -596,37 +623,50 @@ function App() {
        for (const v of arr) sum += v;
        return sum / arr.length;
      };
+
+     const maxTimeFor = (speeds_: number[], times_: string[]) => {
+       if (!speeds_.length) return null;
+       let best = 0;
+       for (let i = 1; i < speeds_.length; i++) {
+         if (speeds_[i] > speeds_[best]) best = i;
+       }
+       return times_[best] ?? null;
+     };
  
      if (times.length && speeds.length && dirs.length) {
        const buckets: Record<
          string,
-         {
-           count: number;
-           speedsAll: number[];
-           dirCounts: Record<string, number>;
-           dirSpeeds: Record<string, number[]>;
-         }
-       > = {};
+          {
+            count: number;
+            speedsAll: number[];
+            dirCounts: Record<string, number>;
+            dirSpeeds: Record<string, number[]>;
+            dirTimes: Record<string, string[]>;
+          }
+        > = {};
  
-       times.forEach((iso, idx) => {
-         const d = new Date(iso);
-         if (Number.isNaN(d.getTime())) return;
-         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-         if (!buckets[key]) {
-           buckets[key] = {
-             count: 0,
-             speedsAll: [],
-             dirCounts: {},
-             dirSpeeds: {},
-           };
-         }
-         const speed = speeds[idx] ?? 0;
-         const dirLabel = degreeToCompass(dirs[idx] ?? 0, highPrecision);
-         buckets[key].count += 1;
-         buckets[key].speedsAll.push(speed);
-         buckets[key].dirCounts[dirLabel] = (buckets[key].dirCounts[dirLabel] ?? 0) + 1;
-         (buckets[key].dirSpeeds[dirLabel] ??= []).push(speed);
-       });
+        times.forEach((iso, idx) => {
+          const d = new Date(iso);
+          if (Number.isNaN(d.getTime())) return;
+          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          if (!buckets[key]) {
+            buckets[key] = {
+              count: 0,
+              speedsAll: [],
+              dirCounts: {},
+              dirSpeeds: {},
+              dirTimes: {},
+            };
+          }
+          const speed = speeds[idx] ?? 0;
+          const dirLabel = degreeToCompass(dirs[idx] ?? 0, highPrecision);
+          buckets[key].count += 1;
+          buckets[key].speedsAll.push(speed);
+          buckets[key].dirCounts[dirLabel] = (buckets[key].dirCounts[dirLabel] ?? 0) + 1;
+          (buckets[key].dirSpeeds[dirLabel] ??= []).push(speed);
+          (buckets[key].dirTimes[dirLabel] ??= []).push(iso);
+        });
+
  
        const keys = Object.keys(buckets).sort();
        const last12 = keys.slice(-12);
@@ -644,12 +684,19 @@ function App() {
          const mAvgSpeeds = labelsArr.map((label) =>
            statFor(bucket.dirSpeeds[label] ?? [])
          );
+         const mMaxTimes = labelsArr.map((label) =>
+           maxTimeFor(
+             bucket.dirSpeeds[label] ?? [],
+             bucket.dirTimes[label] ?? []
+           )
+         );
          const mMaxCount = Math.max(1, ...mCounts);
          monthlySeries.push({
            labels: labelsArr.slice(),
            counts: mCounts,
            avgSpeeds: mAvgSpeeds,
            maxCount: mMaxCount,
+           maxTimes: mMaxTimes,
          });
        });
 
@@ -658,9 +705,11 @@ function App() {
      }
 
 
+    const timesMap: Record<string, string[]> = {};
     labelsArr.forEach((d) => {
       countsMap[d] = 0;
       speedsMap[d] = [];
+      timesMap[d] = [];
     });
 
     dirs.forEach((deg, idx) => {
@@ -668,10 +717,14 @@ function App() {
       const speed = speeds[idx] ?? 0;
       countsMap[k] = (countsMap[k] ?? 0) + 1;
       (speedsMap[k] ??= []).push(speed);
+      (timesMap[k] ??= []).push(times[idx] ?? "");
     });
 
     const countsArr = labelsArr.map((d) => countsMap[d] ?? 0);
     const avgSpeedsArr = labelsArr.map((d) => statFor(speedsMap[d] ?? []));
+    const maxTimesArr = labelsArr.map((d) =>
+      maxTimeFor(speedsMap[d] ?? [], timesMap[d] ?? [])
+    );
 
     const totalHours = times.length || 1;
     let globalMaxFrac = 0;
@@ -690,6 +743,7 @@ function App() {
       labels: labelsArr,
       counts: countsArr,
       avgSpeeds: avgSpeedsArr,
+      maxTimes: maxTimesArr,
       monthly,
       monthlySeries,
       globalMaxFrac,
@@ -745,25 +799,19 @@ function App() {
   const dataset =
     selectedMonthForChart != null && monthlySeries[selectedMonthForChart]
       ? monthlySeries[selectedMonthForChart]
-      : { labels, counts, avgSpeeds, maxCount: Math.max(1, ...counts) };
+      : {
+          labels,
+          counts,
+          avgSpeeds,
+          maxTimes,
+          maxCount: Math.max(1, ...counts),
+        };
 
   const chartLabels = dataset.labels;
   const chartCounts = dataset.counts;
   const chartAvgSpeeds = dataset.avgSpeeds;
+  const chartMaxTimes = dataset.maxTimes;
   const maxCount = dataset.maxCount;
-
-  const activeLabel =
-    activeIndex != null && activeIndex >= 0 && activeIndex < chartLabels.length
-      ? chartLabels[activeIndex]
-      : null;
-  const activeCount =
-    activeIndex != null && activeIndex >= 0 && activeIndex < chartCounts.length
-      ? chartCounts[activeIndex]
-      : null;
-  const activeSpeed =
-    activeIndex != null && activeIndex >= 0 && activeIndex < chartAvgSpeeds.length
-      ? chartAvgSpeeds[activeIndex]
-      : null;
 
   const selectedSpeed =
     selectedIndex != null &&
@@ -783,6 +831,23 @@ function App() {
   const chartTotalCount = selectedMonth
     ? selectedMonth.count
     : data?.hourly?.time?.length ?? 0;
+
+  const tileSeries =
+    tileHover != null ? monthlySeries[tileHover.series] ?? null : null;
+  const tileMonth = tileHover != null ? monthly[tileHover.series] ?? null : null;
+  const tipLabels = tileSeries ? tileSeries.labels : chartLabels;
+  const tipCounts = tileSeries ? tileSeries.counts : chartCounts;
+  const tipMaxTimes = tileSeries ? tileSeries.maxTimes : chartMaxTimes;
+  const tipIndex = tileHover ? tileHover.dir : activeIndex;
+  const tipTotal = tileMonth ? tileMonth.count : chartTotalCount;
+  const tipTitle = tileMonth
+    ? `${monthNames[tileMonth.month - 1]} ${tileMonth.year}`
+    : chartTitle;
+  const tipLabel =
+    tipIndex != null && tipIndex >= 0 && tipIndex < tipLabels.length
+      ? tipLabels[tipIndex]
+      : null;
+
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
    const miniHalf = RADIUS + 20;
@@ -1286,7 +1351,11 @@ function App() {
             {chartLabels.map((label, i) => {
               const value = chartCounts[i];
               const frac =
-                value / Math.max(1, chartTotalCount) / globalMaxFrac;
+                metric === "max"
+                  ? value > 0
+                    ? 1
+                    : 0
+                  : value / Math.max(1, chartTotalCount) / globalMaxFrac;
               const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
               const avgSpeed = chartAvgSpeeds[i] ?? 0;
               const fillColor = colorForSpeed(avgSpeed);
@@ -1403,23 +1472,41 @@ function App() {
                 letterSpacing: 0.02,
               }}
             >
-              {chartTitle}
+              {tipTitle}
             </div>
             <div style={{ fontWeight: 600 }}>
-              {activeLabel
-                ? t.directions[activeLabel] ?? activeLabel
+              {tipLabel
+                ? t.directions[tipLabel] ?? tipLabel
                 : t.noSector}
             </div>
             <div style={{ color: "#9ca3af" }}>
-              {t.frequency}{" "}
-              <strong>
-                {activeCount != null ? `${activeCount}h` : "–"}
-              </strong>
-              {activeCount != null && chartTotalCount > 0 && (
-                <span>
-                  {" "}(
-                  {((activeCount / chartTotalCount) * 100).toFixed(1)}%)
-                </span>
+              {metric === "max" ? (
+                <>
+                  {t.maxAt}{" "}
+                  <strong>
+                    {tipIndex != null && tipMaxTimes[tipIndex]
+                      ? formatDateTime(tipMaxTimes[tipIndex]!, lang)
+                      : "–"}
+                  </strong>
+                </>
+              ) : (
+                <>
+                  {t.frequency}{" "}
+                  <strong>
+                    {tipIndex != null && tipIndex >= 0 && tipIndex < tipCounts.length
+                      ? `${tipCounts[tipIndex]}h`
+                      : "–"}
+                  </strong>
+                  {tipIndex != null &&
+                    tipIndex >= 0 &&
+                    tipIndex < tipCounts.length &&
+                    tipTotal > 0 && (
+                      <span>
+                        {" "}(
+                        {((tipCounts[tipIndex] / tipTotal) * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                </>
               )}
             </div>
             <div
@@ -1633,7 +1720,12 @@ function App() {
               })}
               {series.labels.map((label, i) => {
                 const value = series.counts[i];
-                const frac = value / Math.max(1, m.count) / globalMaxFrac;
+                const frac =
+                  metric === "max"
+                    ? value > 0
+                      ? 1
+                      : 0
+                    : value / Math.max(1, m.count) / globalMaxFrac;
                 const outerR = INNER_RADIUS + frac * (RADIUS - INNER_RADIUS);
                 const avgSpeed = series.avgSpeeds[i] ?? 0;
                 const fillColor = colorForSpeed(avgSpeed);
@@ -1672,8 +1764,14 @@ function App() {
                 return (
                   <g
                     key={label}
-                    onMouseEnter={() => setScaleSpeed(avgSpeed)}
-                    onMouseLeave={() => setScaleSpeed(null)}
+                    onMouseEnter={() => {
+                      setScaleSpeed(avgSpeed);
+                      setTileHover({ series: idx, dir: i });
+                    }}
+                    onMouseLeave={() => {
+                      setScaleSpeed(null);
+                      setTileHover(null);
+                    }}
                     style={{ cursor: "pointer" }}
                   >
                     <path d={d} fill={fillColor} />
