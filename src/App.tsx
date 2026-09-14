@@ -44,9 +44,9 @@ type Lang = "en" | "fr";
 
 const STRINGS = {
   en: {
-    title: "Wind rose for last 365 days",
+    title: "Wind rose for",
     description:
-      "A wind rose summarizing hourly wind measurements from the last 365 days. Each wedge points to the direction the wind blows from and its length shows how often that direction occurs — longer means more frequent. Color shows the average wind speed for that direction, from green (calm) to red (strong).",
+      "A wind rose summarizing hourly wind measurements for the selected year. Each wedge points to the direction the wind blows from and its length shows how often that direction occurs — longer means more frequent. Color shows the average wind speed for that direction, from green (calm) to red (strong).",
     readMore: "Read more",
     readLess: "Read less",
     currentCoords: "Current coordinates:",
@@ -84,6 +84,7 @@ const STRINGS = {
     errInvalidValues: "Invalid latitude/longitude values",
     errFetch: "Failed to fetch data from Open-Meteo",
     errUnknown: "Unknown error",
+    errYearRange: (max: number) => `Year must be between 1940 and ${max}`,
     months: [
       "January",
       "February",
@@ -118,9 +119,9 @@ const STRINGS = {
     } as Record<string, string>,
   },
   fr: {
-    title: "Rose des vents des 365 derniers jours",
+    title: "Rose des vents pour",
     description:
-      "Une rose des vents résumant les mesures horaires du vent des 365 derniers jours. Chaque secteur pointe la direction d'où vient le vent et sa longueur indique sa fréquence — plus le secteur est long, plus le vent souffle souvent de cette direction. La couleur représente la vitesse moyenne du vent pour cette direction, du vert (calme) au rouge (fort).",
+      "Une rose des vents résumant les mesures horaires du vent pour l'année sélectionnée. Chaque secteur pointe la direction d'où vient le vent et sa longueur indique sa fréquence — plus le secteur est long, plus le vent souffle souvent de cette direction. La couleur représente la vitesse moyenne du vent pour cette direction, du vert (calme) au rouge (fort).",
     readMore: "Lire plus",
     readLess: "Lire moins",
     currentCoords: "Coordonnées actuelles :",
@@ -158,6 +159,7 @@ const STRINGS = {
     errInvalidValues: "Valeurs de latitude/longitude invalides",
     errFetch: "Échec de la récupération des données depuis Open-Meteo",
     errUnknown: "Erreur inconnue",
+    errYearRange: (max: number) => `L'année doit être comprise entre 1940 et ${max}`,
     months: [
       "Janvier",
       "Février",
@@ -194,16 +196,37 @@ const STRINGS = {
 };
 
 const formatDateTime = (iso: string, lang: Lang) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(lang === "fr" ? "fr-FR" : "en-US", {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const d = new Date(
+    Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5])
+    )
+  );
+  const navLang =
+    typeof navigator !== "undefined"
+      ? (navigator.language || "").toLowerCase()
+      : "";
+  const isUS = lang === "en" && navLang.startsWith("en-us");
+  const locale = isUS ? "en-US" : lang === "fr" ? "fr-FR" : "en-GB";
+  return d.toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   });
 };
+
+const MIN_YEAR = 1940;
+
+const clampYear = (value: number, maxYear: number) =>
+  Math.min(Math.max(value, MIN_YEAR), maxYear);
 
 const RADIUS = 120;
 const INNER_RADIUS = 20;
@@ -314,19 +337,24 @@ function App() {
   const [highPrecision, setHighPrecision] = useState(false);
   const [coordsInput, setCoordsInput] = useState("43.95998, 4.81797");
   const [coords, setCoords] = useState<{ lat: number; lon: number }>({ lat: 43.95998, lon:  4.81797});
+  const currentYear = new Date().getFullYear();
+  const [yearInput, setYearInput] = useState(String(currentYear));
+  const [year, setYear] = useState(currentYear);
 
-  const loadForCoords = async (lat: number, lon: number) => {
+  const loadForCoords = async (lat: number, lon: number, y: number) => {
     setLoading(true);
     setError(null);
     setCoords({ lat, lon });
+    setYear(y);
+    setYearInput(String(y));
+    const key = `${y}_${lat.toFixed(5)}_${lon.toFixed(5)}`;
+    const canUseLS =
+      typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
+    const cacheKey = "localwind:v4:" + key;
+    let stale: WindResponse | null = null;
     try {
-      const key = `${lat.toFixed(5)}_${lon.toFixed(5)}`;
-      const canUseLS =
-        typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-
-      const CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
       if (canUseLS) {
-        const cacheKey = "localwind:v2:" + key;
         const cached = window.localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -334,25 +362,54 @@ function App() {
               savedAt?: number;
               data?: WindResponse;
             };
-            if (
-              parsed &&
-              typeof parsed.savedAt === "number" &&
-              Date.now() - parsed.savedAt < CACHE_MAX_AGE &&
-              parsed.data
-            ) {
-              setData(parsed.data);
-              setLoading(false);
-              return;
+            if (parsed && parsed.data) {
+              stale = parsed.data;
+              if (
+                typeof parsed.savedAt === "number" &&
+                Date.now() - parsed.savedAt < CACHE_MAX_AGE
+              ) {
+                setData(parsed.data);
+                setLoading(false);
+                return;
+              }
             }
           } catch {
           }
-          window.localStorage.removeItem(cacheKey);
+        }
+        if (!stale) {
+          const coordKey = `${lat.toFixed(5)}_${lon.toFixed(5)}`;
+          const legacyKeys = ["localwind:v3:" + key];
+          if (y === currentYear) legacyKeys.push("localwind:v2:" + coordKey);
+          for (const lk of legacyKeys) {
+            const legacyRaw = window.localStorage.getItem(lk);
+            if (!legacyRaw) continue;
+            try {
+              const legacyParsed = JSON.parse(legacyRaw) as
+                | { data?: WindResponse }
+                | WindResponse;
+              const legacyData =
+                (legacyParsed as { data?: WindResponse }).data ??
+                (legacyParsed as WindResponse);
+              if (legacyData && legacyData.hourly) {
+                stale = legacyData;
+                break;
+              }
+            } catch {
+            }
+          }
         }
       }
       const now = new Date();
-      const end = now.toISOString().slice(0, 10);
-      const startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-      const start = startDate.toISOString().slice(0, 10);
+      let start: string;
+      let end: string;
+      if (y === currentYear) {
+        end = now.toISOString().slice(0, 10);
+        const startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        start = startDate.toISOString().slice(0, 10);
+      } else {
+        start = `${y}-01-01`;
+        end = `${y}-12-31`;
+      }
 
       const url = new URL("https://archive-api.open-meteo.com/v1/archive");
       url.searchParams.set("latitude", String(lat));
@@ -362,30 +419,41 @@ function App() {
       url.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m,wind_gusts_10m");
       url.searchParams.set("timezone", "UTC");
 
-      const res = await fetch(url.toString());
-      if (!res.ok) throw new Error(t.errFetch);
-      const json = (await res.json()) as WindResponse;
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 25000);
+      let json: WindResponse;
+      try {
+        const res = await fetch(url.toString(), { signal: controller.signal });
+        if (!res.ok) throw new Error(t.errFetch);
+        json = (await res.json()) as WindResponse;
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
       setData(json);
 
       if (canUseLS) {
         try {
           window.localStorage.setItem(
-            "localwind:v2:" + key,
+            cacheKey,
             JSON.stringify({ savedAt: Date.now(), data: json })
           );
         } catch {
         }
       }
     } catch (e: any) {
-      setError(e?.message ?? t.errUnknown);
-      setData(null);
+      if (stale) {
+        setData(stale);
+      } else {
+        setError(e?.message ?? t.errUnknown);
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
    useEffect(() => {
-     loadForCoords(43.95998, 4.81797);
+     loadForCoords(43.95998, 4.81797, currentYear);
    }, []);
 
    useEffect(() => {
@@ -490,8 +558,15 @@ function App() {
          }
        });
        loadBtn.addEventListener("click", () => {
+         const parsedYear = Number(yearInput);
          setCoordsInput(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-         loadForCoords(lat, lng);
+         loadForCoords(
+           lat,
+           lng,
+           isFinite(parsedYear)
+             ? clampYear(parsedYear, currentYear)
+             : currentYear
+         );
          setShowMap(false);
        });
        row.appendChild(cancelBtn);
@@ -654,9 +729,9 @@ function App() {
         > = {};
  
         times.forEach((iso, idx) => {
-          const d = new Date(iso);
-          if (Number.isNaN(d.getTime())) return;
-          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          const match = /^(\d{4})-(\d{2})/.exec(iso);
+          if (!match) return;
+          const key = `${match[1]}-${match[2]}`;
           if (!buckets[key]) {
             buckets[key] = {
               count: 0,
@@ -837,7 +912,7 @@ function App() {
     selectedMonthForChart != null ? monthly[selectedMonthForChart] : null;
   const chartTitle = selectedMonth
     ? `${monthNames[selectedMonth.month - 1]} ${selectedMonth.year}`
-    : t.last365;
+    : String(year);
   const chartTotalCount = selectedMonth
     ? selectedMonth.count
     : data?.hourly?.time?.length ?? 0;
@@ -877,6 +952,18 @@ function App() {
     metric === "median" ? t.medianSpeedLabel : t.averageSpeedLabel;
   const centerActive = centerHover != null && centerSpeed != null;
   const infoIndex = centerActive ? null : tipIndex;
+
+  const parsedCoordsInput = coordsInput
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map(Number);
+  const coordsDirty =
+    parsedCoordsInput.length < 2 ||
+    !isFinite(parsedCoordsInput[0]) ||
+    !isFinite(parsedCoordsInput[1]) ||
+    Math.abs(parsedCoordsInput[0] - coords.lat) > 1e-6 ||
+    Math.abs(parsedCoordsInput[1] - coords.lon) > 1e-6;
+  const loadDirty = coordsDirty || Number(yearInput) !== year;
 
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
@@ -986,7 +1073,31 @@ function App() {
                 textOverflow: "ellipsis",
               }}
             >
-              {t.title}
+              {t.title}{" "}
+              <input
+                value={yearInput}
+                onChange={(e) => setYearInput(e.target.value)}
+                inputMode="numeric"
+                aria-label="year"
+                style={{
+                  width: "3.4em",
+                  boxSizing: "border-box",
+                  fontSize: "inherit",
+                  fontWeight: 700,
+                  fontFamily: "inherit",
+                  background: "linear-gradient(to right, #22d3ee, #818cf8)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  color: "transparent",
+                  caretColor: "#38bdf8",
+                  border: "1px dashed rgba(148,163,184,0.7)",
+                  borderRadius: 6,
+                  padding: "0 0.2em",
+                  textAlign: "center",
+                  outline: "none",
+                }}
+              />
             </h1>
             <p
               onClick={
@@ -1073,10 +1184,9 @@ function App() {
                   style={{
                     padding: "0.45rem 0.9rem",
                     borderRadius: 999,
-                    border: "1px solid rgba(129,140,248,0.9)",
-                    background:
-                      "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))",
-                    color: "white",
+                    border: "1px solid rgba(148,163,184,0.6)",
+                    background: "rgba(15,23,42,0.95)",
+                    color: "#e5e7eb",
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: "pointer",
@@ -1098,15 +1208,27 @@ function App() {
                       setError(t.errInvalidValues);
                       return;
                     }
-                    loadForCoords(lat, lon);
+                    const parsedYear = Number(yearInput);
+                    if (
+                      !isFinite(parsedYear) ||
+                      parsedYear < MIN_YEAR ||
+                      parsedYear > currentYear
+                    ) {
+                      setError(t.errYearRange(currentYear));
+                      return;
+                    }
+                    loadForCoords(lat, lon, parsedYear);
                   }}
                   style={{
                     padding: "0.45rem 0.9rem",
                     borderRadius: 999,
-                    border: "1px solid rgba(129,140,248,0.9)",
-                    background:
-                      "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))",
-                    color: "white",
+                    border: loadDirty
+                      ? "1px solid rgba(129,140,248,0.9)"
+                      : "1px solid rgba(148,163,184,0.5)",
+                    background: loadDirty
+                      ? "linear-gradient(to right, rgba(59,130,246,0.95), rgba(129,140,248,0.98))"
+                      : "rgba(15,23,42,0.8)",
+                    color: loadDirty ? "white" : "#e5e7eb",
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: "pointer",
