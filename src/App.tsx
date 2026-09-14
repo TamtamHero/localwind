@@ -72,6 +72,8 @@ const STRINGS = {
     last365: "Last 365 days",
     noSector: "No sector selected",
     frequency: "Frequency",
+    averageSpeedLabel: "Average wind speed",
+    medianSpeedLabel: "Median wind speed",
     maxAt: "Max on",
     searchPlaceholder: "Search a place (e.g. Paris, Montpellier)",
     searching: "Searching…",
@@ -144,6 +146,8 @@ const STRINGS = {
     last365: "365 derniers jours",
     noSector: "Aucun secteur sélectionné",
     frequency: "Fréquence",
+    averageSpeedLabel: "Vitesse moyenne",
+    medianSpeedLabel: "Vitesse médiane",
     maxAt: "Maximum le",
     searchPlaceholder: "Rechercher un lieu (ex. Paris, Montpellier)",
     searching: "Recherche…",
@@ -405,6 +409,9 @@ function App() {
      series: number;
      dir: number;
    } | null>(null);
+   const [centerHover, setCenterHover] = useState<{
+     scope: "main" | number;
+   } | null>(null);
    const [scaleSpeed, setScaleSpeed] = useState<number | null>(null);
    const [relativeSpeed, setRelativeSpeed] = useState(false);
    const [metric, setMetric] = useState<"average" | "median" | "max">("average");
@@ -588,6 +595,7 @@ function App() {
     counts,
     avgSpeeds,
     maxTimes,
+    overallSpeed,
     monthly,
     monthlySeries,
     globalMaxFrac,
@@ -725,6 +733,7 @@ function App() {
     const maxTimesArr = labelsArr.map((d) =>
       maxTimeFor(speedsMap[d] ?? [], timesMap[d] ?? [])
     );
+    const overallSpeed = statFor(speeds);
 
     const totalHours = times.length || 1;
     let globalMaxFrac = 0;
@@ -744,6 +753,7 @@ function App() {
       counts: countsArr,
       avgSpeeds: avgSpeedsArr,
       maxTimes: maxTimesArr,
+      overallSpeed,
       monthly,
       monthlySeries,
       globalMaxFrac,
@@ -847,6 +857,26 @@ function App() {
     tipIndex != null && tipIndex >= 0 && tipIndex < tipLabels.length
       ? tipLabels[tipIndex]
       : null;
+
+  const discEnabled = metric !== "max" && !useGusts;
+  const centerSpeed =
+    centerHover == null
+      ? null
+      : centerHover.scope === "main"
+      ? overallSpeed
+      : monthly[centerHover.scope]?.avgSpeed ?? 0;
+  const centerTitle =
+    centerHover != null &&
+    typeof centerHover.scope === "number" &&
+    monthly[centerHover.scope]
+      ? `${monthNames[monthly[centerHover.scope].month - 1]} ${
+          monthly[centerHover.scope].year
+        }`
+      : chartTitle;
+  const centerLabel =
+    metric === "median" ? t.medianSpeedLabel : t.averageSpeedLabel;
+  const centerActive = centerHover != null && centerSpeed != null;
+  const infoIndex = centerActive ? null : tipIndex;
 
    const center = RADIUS + 30;
    const totalRadius = RADIUS + 40;
@@ -1437,14 +1467,25 @@ function App() {
               );
             })}
 
-            <circle
-              cx={center}
-              cy={center}
-              r={4}
-              fill="#e5e7eb"
-              stroke="#0f172a"
-              strokeWidth={1}
-            />
+            {discEnabled && (
+              <circle
+                cx={center}
+                cy={center}
+                r={16}
+                fill={colorForSpeed(overallSpeed)}
+                stroke={centerHover?.scope === "main" ? "#f9fafb" : "#020617"}
+                strokeWidth={1}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => {
+                  setScaleSpeed(overallSpeed);
+                  setCenterHover({ scope: "main" });
+                }}
+                onMouseLeave={() => {
+                  setScaleSpeed(null);
+                  setCenterHover(null);
+                }}
+              />
+            )}
           </svg>
            </div>
 
@@ -1472,10 +1513,12 @@ function App() {
                 letterSpacing: 0.02,
               }}
             >
-              {tipTitle}
+              {centerActive ? centerTitle : tipTitle}
             </div>
             <div style={{ fontWeight: 600 }}>
-              {tipLabel
+              {centerActive
+                ? centerLabel
+                : tipLabel
                 ? t.directions[tipLabel] ?? tipLabel
                 : t.noSector}
             </div>
@@ -1484,8 +1527,8 @@ function App() {
                 <>
                   {t.maxAt}{" "}
                   <strong>
-                    {tipIndex != null && tipMaxTimes[tipIndex]
-                      ? formatDateTime(tipMaxTimes[tipIndex]!, lang)
+                    {infoIndex != null && tipMaxTimes[infoIndex]
+                      ? formatDateTime(tipMaxTimes[infoIndex]!, lang)
                       : "–"}
                   </strong>
                 </>
@@ -1493,17 +1536,19 @@ function App() {
                 <>
                   {t.frequency}{" "}
                   <strong>
-                    {tipIndex != null && tipIndex >= 0 && tipIndex < tipCounts.length
-                      ? `${tipCounts[tipIndex]}h`
+                    {infoIndex != null &&
+                    infoIndex >= 0 &&
+                    infoIndex < tipCounts.length
+                      ? `${tipCounts[infoIndex]}h`
                       : "–"}
                   </strong>
-                  {tipIndex != null &&
-                    tipIndex >= 0 &&
-                    tipIndex < tipCounts.length &&
+                  {infoIndex != null &&
+                    infoIndex >= 0 &&
+                    infoIndex < tipCounts.length &&
                     tipTotal > 0 && (
                       <span>
                         {" "}(
-                        {((tipCounts[tipIndex] / tipTotal) * 100).toFixed(1)}%)
+                        {((tipCounts[infoIndex] / tipTotal) * 100).toFixed(1)}%)
                       </span>
                     )}
                 </>
@@ -1774,7 +1819,24 @@ function App() {
                     }}
                     style={{ cursor: "pointer" }}
                   >
-                    <path d={d} fill={fillColor} />
+                    <path
+                      d={d}
+                      fill={fillColor}
+                      stroke={
+                        tileHover &&
+                        tileHover.series === idx &&
+                        tileHover.dir === i
+                          ? "#f9fafb"
+                          : "#020617"
+                      }
+                      strokeWidth={
+                        tileHover &&
+                        tileHover.series === idx &&
+                        tileHover.dir === i
+                          ? 1
+                          : 0.4
+                      }
+                    />
                     <text
                       x={lx}
                       y={ly}
@@ -1788,6 +1850,25 @@ function App() {
                   </g>
                 );
               })}
+              {discEnabled && (
+                <circle
+                  cx={center}
+                  cy={center}
+                  r={15}
+                  fill={colorForSpeed(m.avgSpeed)}
+                  stroke={centerHover?.scope === idx ? "#f9fafb" : "#020617"}
+                  strokeWidth={centerHover?.scope === idx ? 1 : 0.8}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => {
+                    setScaleSpeed(m.avgSpeed);
+                    setCenterHover({ scope: idx });
+                  }}
+                  onMouseLeave={() => {
+                    setScaleSpeed(null);
+                    setCenterHover(null);
+                  }}
+                />
+              )}
               </svg>
             </div>
           </div>
