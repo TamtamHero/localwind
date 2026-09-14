@@ -445,12 +445,36 @@ function App() {
         setData(stale);
       } else {
         setError(e?.message ?? t.errUnknown);
-        setData(null);
+        setData((prev) => prev ?? null);
       }
     } finally {
       setLoading(false);
     }
   };
+
+   const handleLoad = () => {
+     const parts = coordsInput.split(/[,\s]+/).filter(Boolean);
+     if (parts.length < 2) {
+       setError(t.errInvalidFormat);
+       return;
+     }
+     const lat = Number(parts[0]);
+     const lon = Number(parts[1]);
+     if (!isFinite(lat) || !isFinite(lon)) {
+       setError(t.errInvalidValues);
+       return;
+     }
+     const parsedYear = Number(yearInput);
+     if (
+       !isFinite(parsedYear) ||
+       parsedYear < MIN_YEAR ||
+       parsedYear > currentYear
+     ) {
+       setError(t.errYearRange(currentYear));
+       return;
+     }
+     loadForCoords(lat, lon, parsedYear);
+   };
 
    useEffect(() => {
      loadForCoords(43.95998, 4.81797, currentYear);
@@ -837,7 +861,7 @@ function App() {
 
 
 
-   if (loading)
+   if (loading && !data)
      return (
        <div
          style={{
@@ -857,7 +881,7 @@ function App() {
        </div>
      );
 
-   if (error)
+   if (error && !data)
      return (
        <div
          style={{
@@ -1035,6 +1059,39 @@ function App() {
            alignItems: isPortrait ? "flex-start" : "stretch",
          }}
        >
+         {loading && data && (
+           <div
+             style={{
+               position: "fixed",
+               top: 12,
+               left: "50%",
+               transform: "translateX(-50%)",
+               zIndex: 100,
+               padding: "8px 16px",
+               borderRadius: 999,
+               background: "rgba(15,23,42,0.95)",
+               border: "1px solid rgba(129,140,248,0.8)",
+               color: "#93c5fd",
+               fontSize: 13,
+               fontWeight: 500,
+               boxShadow: "0 10px 30px rgba(15,23,42,0.8)",
+               display: "flex",
+               alignItems: "center",
+               gap: 8,
+             }}
+           >
+             <span
+               style={{
+                 width: 12,
+                 height: 12,
+                 borderRadius: "50%",
+                 border: "2px solid rgba(147,197,253,0.3)",
+                 borderTopColor: "#93c5fd",
+               }}
+             />
+             {t.loading}
+           </div>
+         )}
          <div
            style={{
              width: "100%",
@@ -1077,6 +1134,12 @@ function App() {
               <input
                 value={yearInput}
                 onChange={(e) => setYearInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleLoad();
+                  }
+                }}
                 inputMode="numeric"
                 aria-label="year"
                 style={{
@@ -1196,29 +1259,7 @@ function App() {
                   {t.map}
                 </button>
                 <button
-                  onClick={() => {
-                    const parts = coordsInput.split(/[,\s]+/).filter(Boolean);
-                    if (parts.length < 2) {
-                      setError(t.errInvalidFormat);
-                      return;
-                    }
-                    const lat = Number(parts[0]);
-                    const lon = Number(parts[1]);
-                    if (!isFinite(lat) || !isFinite(lon)) {
-                      setError(t.errInvalidValues);
-                      return;
-                    }
-                    const parsedYear = Number(yearInput);
-                    if (
-                      !isFinite(parsedYear) ||
-                      parsedYear < MIN_YEAR ||
-                      parsedYear > currentYear
-                    ) {
-                      setError(t.errYearRange(currentYear));
-                      return;
-                    }
-                    loadForCoords(lat, lon, parsedYear);
-                  }}
+                  onClick={handleLoad}
                   style={{
                     padding: "0.45rem 0.9rem",
                     borderRadius: 999,
